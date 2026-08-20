@@ -1,0 +1,18 @@
+# Web
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+
+# База данных
+sqlalchemy
+
+# Генерация тестов из PDF
+pdfplumber
+openai
+
+# Расписание доступа к тестам
+apscheduler
+
+# Конфигурация из .env
+python-dotenv

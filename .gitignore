@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Переменные окружения
+.env
+
+# База данных и загруженные файлы
+data/*.db
+uploads/*
+!uploads/.gitkeep
+
+# macOS
+.DS_Store
