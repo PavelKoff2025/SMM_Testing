@@ -1,8 +1,14 @@
 {% extends "base.html" %}
-{% block title %}{{ title }}{% endblock %}
+{% block title %}Тесты по лекциям{% endblock %}
 
 {% block content %}
-<h2>Тесты по лекциям</h2>
-<p>Список тестов появится здесь после публикации преподавателем.</p>
-<p class="note">Каждый тест — {{ questions_per_test }} вопросов, зачёт при ≥ {{ pass_threshold }} правильных.</p>
+<section class="card">
+  <h2>Тесты по лекциям</h2>
+  <p class="muted">Выберите лекцию и пройдите тест. Каждый тест — {{ questions_per_test }} вопросов, зачёт при ≥ {{ pass_threshold }} правильных.</p>
+</section>
+
+<section class="empty">
+  <p>Список тестов появится здесь после публикации преподавателем.</p>
+  <p class="muted">Доступ открывается после того, как лекция прочитана всем группам курса.</p>
+</section>
 {% endblock %}

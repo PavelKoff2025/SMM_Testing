@@ -6,6 +6,7 @@
 """
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from app.database import Base, engine
 
 app = FastAPI(title="SMM Testing", docs_url="/docs")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
 
 # Создаём таблицы, когда они появятся в models.py (Этап 1)
 Base.metadata.create_all(bind=engine)

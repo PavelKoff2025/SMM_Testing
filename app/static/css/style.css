@@ -1,0 +1,182 @@
+/*
+  SMM Testing — оформление в стиле сайта misis.ru
+  Палитра и типографика воспроизводят фирменный стиль НИТУ МИСИС:
+    - основной синий:   #0541F0
+    - тёмно-синий:      #0A1E64 (шапка)
+    - фон страницы:     #F9F9FF
+    - красный/ошибки:   #FA2E53
+    - жёлтый акцент:    #F6E14F
+    - зелёный/успех:    #6DC282
+    - шрифт: Raleway, крупное скругление 1.6rem
+*/
+
+:root {
+  --misis-blue: #0541F0;
+  --misis-navy: #0A1E64;
+  --misis-bg: #F9F9FF;
+  --misis-red: #FA2E53;
+  --misis-yellow: #F6E14F;
+  --misis-green: #6DC282;
+  --misis-gray: #7F7F7F;
+  --misis-border: #E8E8E8;
+  --radius: 1.6rem;
+  --container: 1440px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Raleway", -apple-system, "Segoe UI", sans-serif;
+  background: var(--misis-bg);
+  color: #1a1a1a;
+  line-height: 1.5;
+}
+
+a { color: var(--misis-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ===== Шапка ===== */
+.site-header {
+  background: var(--misis-navy);
+  color: #fff;
+  padding: 0 20px;
+}
+.site-header .header-inner {
+  max-width: var(--container);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 14px 0;
+}
+.site-header .logo {
+  font-weight: 900;
+  font-size: 1.25rem;
+  letter-spacing: .02em;
+  color: #fff;
+}
+.site-header .logo .accent { color: var(--misis-yellow); }
+.site-header .subtitle {
+  font-size: .9rem;
+  color: #c9d2f5;
+  font-weight: 400;
+}
+.site-header nav { margin-left: auto; display: flex; gap: 1.25rem; }
+.site-header nav a {
+  color: #fff;
+  font-weight: 500;
+  font-size: .95rem;
+}
+.site-header nav a:hover { color: var(--misis-yellow); text-decoration: none; }
+
+/* ===== Контейнер и заголовки ===== */
+.container {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 2rem 20px;
+}
+h1, h2, h3 { font-family: "Raleway", sans-serif; color: var(--misis-navy); font-weight: 700; }
+h2 { font-size: 1.6rem; margin-top: 0; }
+.muted { color: var(--misis-gray); }
+
+/* ===== Карточки ===== */
+.card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 1px 8px rgba(10, 30, 100, .06);
+  margin-bottom: 1.25rem;
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+/* ===== Кнопки (как .btn на misis.ru) ===== */
+.btn {
+  display: inline-block;
+  background: var(--misis-blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 22px;
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: background .15s ease;
+}
+.btn:hover { background: #0433c2; color: #fff; text-decoration: none; }
+.btn-outline { background: transparent; color: var(--misis-blue); border: 2px solid var(--misis-blue); }
+.btn-outline:hover { background: var(--misis-blue); color: #fff; }
+.btn-danger { background: var(--misis-red); }
+.btn-danger:hover { background: #d8234a; color: #fff; }
+.btn-success { background: var(--misis-green); }
+.btn-success:hover { background: #55a85f; color: #fff; }
+
+/* ===== Формы ===== */
+label { display: block; font-weight: 500; margin: .75rem 0 .25rem; }
+input[type="text"], input[type="email"], input[type="password"],
+input[type="datetime-local"], select, textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--misis-border);
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fff;
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--misis-blue);
+  outline-offset: -1px;
+  border-color: var(--misis-blue);
+}
+
+/* ===== Бейджи статусов теста ===== */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 50px;
+  font-size: .8rem;
+  font-weight: 600;
+}
+.badge-open { background: #e7f6e1; color: #2f7a1f; }
+.badge-draft { background: #eee; color: #555; }
+.badge-scheduled { background: #e6efff; color: var(--misis-blue); }
+.badge-closed { background: #fde7ec; color: var(--misis-red); }
+.badge-pass { background: #e7f6e1; color: #2f7a1f; }
+.badge-fail { background: #fde7ec; color: var(--misis-red); }
+
+/* ===== Таблицы (кабинет преподавателя) ===== */
+table { width: 100%; border-collapse: collapse; background: #fff; border-radius: var(--radius); overflow: hidden; }
+th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--misis-border); }
+th { background: var(--misis-navy); color: #fff; font-weight: 600; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #f4f6ff; }
+
+/* ===== Подвал ===== */
+.site-footer {
+  background: var(--misis-navy);
+  color: #c9d2f5;
+  text-align: center;
+  padding: 1.25rem 20px;
+  font-size: .85rem;
+  margin-top: 2rem;
+}
+.site-footer a { color: #fff; }
+
+/* ===== Утилиты ===== */
+.row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.spacer { flex: 1; }
+.text-center { text-align: center; }
+.mt-2 { margin-top: 2rem; }
+.empty {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 2rem;
+  text-align: center;
+  color: var(--misis-gray);
+}
