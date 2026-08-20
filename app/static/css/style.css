@@ -31,6 +31,7 @@ body {
   background: var(--misis-bg);
   color: #1a1a1a;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 a { color: var(--misis-blue); text-decoration: none; }
@@ -179,4 +180,55 @@ tr:hover td { background: #f4f6ff; }
   padding: 2rem;
   text-align: center;
   color: var(--misis-gray);
+}
+
+/* ===== Адаптивность: планшеты и телефоны ===== */
+
+/* Планшеты (≤ 992px) */
+@media (max-width: 992px) {
+  .site-header .header-inner { flex-wrap: wrap; }
+  .site-header nav { margin-left: 0; }
+  .container { padding: 1.5rem 16px; }
+  h2 { font-size: 1.4rem; }
+  .card-grid { grid-template-columns: 1fr; }
+}
+
+/* Мобильные (≤ 640px) */
+@media (max-width: 640px) {
+  .site-header { padding: 0 14px; }
+  .site-header .header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: .5rem;
+    padding: 12px 0;
+    width: 100%;
+  }
+  .site-header .logo {
+    font-size: 1rem;
+    font-weight: 700;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .site-header .subtitle {
+    font-size: .82rem;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .site-header nav {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: .75rem 1rem;
+  }
+  .site-header nav a { font-size: .85rem; }
+  .container { padding: 1rem 14px; }
+  h2 { font-size: 1.25rem; }
+  .card { padding: 1.1rem 1.2rem; border-radius: 1.2rem; }
+  /* Кнопки — во всю ширину, друг под другом */
+  .btn { display: block; width: 100%; padding: 12px 16px; }
+  .row { flex-direction: column; align-items: stretch; }
+  /* Таблицы: горизонтальная прокрутка на узких экранах */
+  table { display: block; overflow-x: auto; white-space: nowrap; }
+  th, td { padding: 10px 12px; }
 }
