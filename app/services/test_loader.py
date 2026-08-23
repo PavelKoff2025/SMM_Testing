@@ -1,12 +1,15 @@
 """
-Загрузчик теста из JSON-файла в БД (Этап 2).
+Загрузчик теста из JSON в БД (Этап 2 + Этап 5).
 
-Поток: файл → dict → Pydantic-валидация (TestIn) → транзакция
+Поток: данные → dict → Pydantic-валидация (TestIn) → транзакция
 (создаём Test + 10 Question). Если валидация или вставка падает — откат,
 в БД не остаётся «полузалитого» теста.
 
 Идемпотентность: если тест с таким lecture_title уже есть — пропускаем
 и возвращаем (False, существующий_тест), не дублируем.
+
+Две точки входа (Этап 5): из файла (seed/CLI) и из dict (веб-форма
+кабинета преподавателя) — общая логика в load_test_from_data.
 """
 import json
 from pathlib import Path
@@ -20,21 +23,18 @@ from app.models import Test, TestSource, TestStatus, Question, Difficulty
 from app.schemas import TestIn, validate_test
 
 
-def load_test_from_file(path: str | Path, db: Session) -> tuple[bool, Optional[Test]]:
-    """Загрузить один тест из JSON-файла.
+def load_test_from_data(data: dict, db: Session) -> tuple[bool, Optional[Test]]:
+    """Загрузить тест из словаря (распарсенный JSON).
 
     Возвращает (created, test):
       • created=True, test=<новый Test>   — тест создан;
       • created=False, test=<существующий> — тест с таким lecture_title уже есть, пропущен.
 
-    Поднимает ValueError / ValidationError / FileNotFoundError при ошибках —
-    загрузчик не глотает их, чтобы вызывающий код (seed/роут) решал, как реагировать.
+    Поднимает ValueError / ValidationError при ошибках — вызывающий код
+    (seed, роут преподавателя) решает, как реагировать.
     """
-    path = Path(path)
-    raw = json.loads(path.read_text(encoding="utf-8"))   # FileNotFoundError/JSONDecodeError наверх
-
     # 1. Валидация структуры (10 вопросов, 4/4/2, индексы, номера) — до БД.
-    test_in: TestIn = validate_test(raw)
+    test_in: TestIn = validate_test(data)
 
     # 2. Идемпотентность: не дублируем тест с тем же названием лекции.
     existing = db.query(Test).filter(Test.lecture_title == test_in.lecture_title).one_or_none()
@@ -46,7 +46,7 @@ def load_test_from_file(path: str | Path, db: Session) -> tuple[bool, Optional[T
         test = Test(
             lecture_title=test_in.lecture_title,
             status=TestStatus.draft,        # новый тест скрыт от студентов
-            source=TestSource.json,         # загружен готовым JSON
+            source=TestSource.json,         # загружен готовый JSON
             pass_threshold=PASS_THRESHOLD,  # из конфига, не хардкод
         )
         db.add(test)
@@ -68,4 +68,14 @@ def load_test_from_file(path: str | Path, db: Session) -> tuple[bool, Optional[T
         raise
 
 
-__all__ = ["load_test_from_file"]
+def load_test_from_file(path: str | Path, db: Session) -> tuple[bool, Optional[Test]]:
+    """Загрузить один тест из JSON-файла — обёртка над load_test_from_data.
+
+    Поднимает FileNotFoundError / JSONDecodeError при ошибках чтения файла.
+    """
+    path = Path(path)
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return load_test_from_data(raw, db)
+
+
+__all__ = ["load_test_from_file", "load_test_from_data"]

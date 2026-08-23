@@ -340,3 +340,58 @@ tr.row-correct td { background: #f4fbf0; }
 tr.row-wrong td { background: #fef5f7; }
 tr.row-correct:hover td { background: #ebf7e3; }
 tr.row-wrong:hover td { background: #fde7ec; }
+
+/* ============================================================
+   Этап 5: кабинет преподавателя
+   ============================================================ */
+
+/* Успешный алерт (в дополнение к alert-error) */
+.alert-success { background: #e7f6e1; color: #2f7a1f; border: 1px solid #bfe3b0; }
+
+/* Полоса статистики на дашборде */
+.stat-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.stat {
+  flex: 1 1 120px;
+  background: var(--misis-bg);
+  border-radius: var(--radius);
+  padding: 1rem;
+  text-align: center;
+}
+.stat-num { display: block; font-size: 1.8rem; font-weight: 900; color: var(--misis-navy); }
+.stat-label { display: block; font-size: .85rem; color: var(--misis-gray); margin-top: .15rem; }
+
+/* Поле загрузки файла */
+input[type="file"] {
+  width: 100%;
+  padding: 10px 0;
+  border: 1px dashed var(--misis-border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: .95rem;
+  background: var(--misis-bg);
+}
+
+/* Правильный вариант в предпросмотре преподавателя */
+.option.option-correct {
+  border-color: var(--misis-green);
+  background: #e7f6e1;
+  font-weight: 600;
+}
+.opt-marker {
+  flex: 0 0 auto;
+  width: 1.4rem;
+  text-align: center;
+  font-weight: 700;
+  color: var(--misis-green);
+}
+
+/* Кнопка disabled */
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-success:disabled:hover { background: var(--misis-green); color: #fff; }
+
+/* Ссылки действий в таблице */
+.action-links a { font-size: .9rem; }

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ test.lecture_title }} · предпросмотр{% endblock %}
+
+{% set diff_labels = {"easy": "Лёгкий", "medium": "Средний", "logic": "Логика"} %}
+
+{% block content %}
+<section class="card">
+  <div class="row">
+    <h2 style="margin:0">{{ test.lecture_title }}</h2>
+    <span class="spacer"></span>
+    <a href="/teacher" class="btn btn-outline">← К списку</a>
+  </div>
+  <p class="muted">
+    Тест #{{ test.id }} · источник: {{ test.source.value }} ·
+    статус: <span class="badge badge-{{ test.status.value }}">{{ test.status.value }}</span> ·
+    вопросов: {{ test.questions|length }} / {{ questions_per_test }} ·
+    порог зачёта: {{ test.pass_threshold }}
+  </p>
+</section>
+
+{% if flash %}<div class="alert alert-success">{{ flash }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <h3>Публикация</h3>
+  {% if not can_open %}
+    <div class="alert alert-error">
+      У теста {{ test.questions|length }} из {{ questions_per_test }} вопросов — открыть нельзя.
+      {% if test.source.value == "pdf" %}
+        Сгенерируйте вопросы из PDF (этап 6).
+      {% else %}
+        Загрузите корректный JSON с 10 вопросами 4/4/2.
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="row">
+    {% if test.status.value == "open" %}
+      <form method="post" action="/teacher/test/{{ test.id }}/close" style="margin:0">
+        <button class="btn btn-danger" type="submit">Закрыть тест</button>
+      </form>
+    {% else %}
+      <form method="post" action="/teacher/test/{{ test.id }}/open" style="margin:0">
+        <button class="btn btn-success" type="submit" {% if not can_open %}disabled{% endif %}>Открыть доступ</button>
+      </form>
+    {% endif %}
+    {% if test.source.value == "pdf" %}
+      <span class="muted" style="margin-left:.5rem">Сгенерировать вопросы (этап 6) — скоро</span>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card">
+  <h3>Вопросы ({{ test.questions|length }})</h3>
+  {% if test.questions %}
+  {% for q in test.questions %}
+  <div class="test-question">
+    <div class="q-head">
+      <span class="q-num">{{ q.number }}</span>
+      <span class="q-text">{{ q.text }}</span>
+      <span class="badge badge-{{ q.difficulty.value }}">{{ diff_labels[q.difficulty.value] }}</span>
+    </div>
+    <div class="options">
+      {% for opt in q.options %}
+      <label class="option {% if loop.index0 == q.correct_answer %}option-correct{% endif %}">
+        <span class="opt-marker">{% if loop.index0 == q.correct_answer %}✓{% else %}·{% endif %}</span>
+        <span>{{ opt }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="empty">
+    <p>В тесте нет вопросов.</p>
+    {% if test.source.value == "pdf" %}
+      <p class="muted">Вопросы будут сгенерированы из PDF на этапе 6 (GPT-4o-mini).</p>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

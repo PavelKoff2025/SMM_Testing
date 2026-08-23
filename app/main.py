@@ -19,6 +19,7 @@ import config
 import app.models  # noqa: F401  — регистрирует модели в Base.metadata
 from app.database import Base, engine, get_db
 from app.routers import student
+from app.routers import teacher
 from app.services.queries import list_available_tests
 
 app = FastAPI(title="SMM Testing", docs_url="/docs")
@@ -34,8 +35,9 @@ app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")
 # Создаём все таблицы при старте (модели определены на этапе 1).
 Base.metadata.create_all(bind=engine)
 
-# Роуты студента.
+# Роуты студента и преподавателя.
 app.include_router(student.router)
+app.include_router(teacher.router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -58,9 +60,3 @@ async def index(request: Request, db: Session = Depends(get_db)):
 async def health():
     """Проверка, что приложение живое."""
     return {"status": "ok"}
-
-
-@app.get("/teacher", response_class=HTMLResponse)
-async def teacher_cabinet(request: Request):
-    """Кабинет преподавателя: управление тестами и аналитика (каркас, Этап 5)."""
-    return templates.TemplateResponse(request, "teacher.html", {"title": "Кабинет преподавателя"})

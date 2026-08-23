@@ -2,28 +2,102 @@
 {% block title %}Кабинет преподавателя{% endblock %}
 
 {% block content %}
+
+{% if not teacher %}
+{# === Форма входа === #}
 <section class="card">
-  <h2>Кабинет преподавателя</h2>
-  <p class="muted">Управление тестами: создание из PDF-презентации, публикация по расписанию, мониторинг результатов и допуск к финальному зачёту.</p>
+  <h2>Вход в кабинет преподавателя</h2>
+  <p class="muted">Доступ по паролю преподавателя (настраивается в <code>.env</code>, переменная <code>TEACHER_PASSWORD</code>).</p>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/teacher/login" class="form-narrow">
+    <label for="password">Пароль</label>
+    <input type="password" id="password" name="password" required autofocus>
+    <button class="btn" type="submit">Войти</button>
+  </form>
 </section>
 
-<!-- Заглушка: полный кабинет появится на Этапах 5–9 -->
+{% else %}
+{# === Дашборд === #}
 <section class="card">
-  <h3>Вход в кабинет</h3>
-  <p class="muted">Доступ по паролю преподавателя (настраивается в <code>.env</code>).</p>
-  <div class="empty">
-    <p>Форма входа появится здесь.</p>
+  <div class="row">
+    <h2 style="margin:0">Кабинет преподавателя</h2>
+    <span class="spacer"></span>
+    <form method="post" action="/teacher/logout" style="margin:0">
+      <button class="btn btn-outline" type="submit">Выйти</button>
+    </form>
+  </div>
+  <p class="muted">Управление тестами: создание, публикация, мониторинг.</p>
+</section>
+
+{% if flash %}<div class="alert alert-success">{{ flash }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+{# Статистика #}
+<section class="card">
+  <div class="stat-row">
+    <div class="stat"><span class="stat-num">{{ stats.tests_total }}</span><span class="stat-label">тестов</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.draft }}</span><span class="stat-label">черновиков</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.open }}</span><span class="stat-label">открыто</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.students }}</span><span class="stat-label">студентов</span></div>
+    <div class="stat"><span class="stat-num">{{ stats.attempts }}</span><span class="stat-label">попыток</span></div>
   </div>
 </section>
 
+{# Загрузка теста — две формы #}
+<div class="card-grid">
+  <section class="card">
+    <h3>Загрузить готовый JSON-тест</h3>
+    <p class="muted">Файл формата <code>{"lecture_title", "questions": [...]}</code> с 10 вопросами в пропорции 4/4/2. Тест создаётся как черновик.</p>
+    <form method="post" action="/teacher/upload/json" enctype="multipart/form-data">
+      <label for="json_file">JSON-файл</label>
+      <input type="file" id="json_file" name="file" accept=".json" required>
+      <button class="btn" type="submit">Загрузить</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h3>Загрузить PDF-презентацию</h3>
+    <p class="muted">PDF лекции → автогенерация 10 вопросов 4/4/2 (GPT-4o-mini, <strong>этап 6</strong>). Пока файл сохраняется как черновик без вопросов.</p>
+    <form method="post" action="/teacher/upload/pdf" enctype="multipart/form-data">
+      <label for="pdf_title">Название лекции</label>
+      <input type="text" id="pdf_title" name="lecture_title" required maxlength="255">
+      <label for="pdf_file">PDF-файл</label>
+      <input type="file" id="pdf_file" name="file" accept=".pdf" required>
+      <button class="btn" type="submit">Загрузить PDF</button>
+    </form>
+  </section>
+</div>
+
+{# Список тестов #}
 <section class="card">
-  <h3>Разделы кабинета</h3>
-  <ul>
-    <li>Создание теста: загрузка PDF-презентации → автогенерация 10 вопросов 4/4/2 (GPT-4o-mini) или загрузка готового JSON.</li>
-    <li>Публикация: вручную или по расписанию (статусы draft → scheduled → open → closed).</li>
-    <li>Аналитика: сводная таблица попыток с ошибками по сложности.</li>
-    <li>Допуск к зачёту: все 9 тестов + минимум 81 из 90 правильных ответов.</li>
-  </ul>
-  <p class="muted">Разделы подключаются на следующих этапах разработки.</p>
+  <h3>Тесты</h3>
+  {% if tests %}
+  <table>
+    <thead>
+      <tr><th>#</th><th>Лекция</th><th>Источник</th><th>Статус</th><th>Вопросов</th><th>Попыток</th><th>Действия</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tests %}
+      <tr>
+        <td>{{ t.id }}</td>
+        <td><a href="/teacher/test/{{ t.id }}">{{ t.lecture_title }}</a></td>
+        <td>{{ t.source.value }}</td>
+        <td><span class="badge badge-{{ t.status.value }}">{{ t.status.value }}</span></td>
+        <td>{{ t.questions|length }} / {{ questions_per_test }}</td>
+        <td>{{ t._attempts_count }}</td>
+        <td class="action-links">
+          <a href="/teacher/test/{{ t.id }}">Предпросмотр</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty"><p>Тестов пока нет. Загрузите JSON-тест или PDF-презентацию выше.</p></div>
+  {% endif %}
 </section>
+{% endif %}
+
 {% endblock %}
