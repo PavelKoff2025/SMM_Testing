@@ -3,6 +3,7 @@ fastapi
 uvicorn[standard]
 jinja2
 python-multipart
+itsdangerous  # SessionMiddleware (подписанная кука студента)
 
 # База данных
 sqlalchemy

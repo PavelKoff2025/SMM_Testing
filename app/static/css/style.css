@@ -232,3 +232,111 @@ tr:hover td { background: #f4f6ff; }
   table { display: block; overflow-x: auto; white-space: nowrap; }
   th, td { padding: 10px 12px; }
 }
+
+/* ============================================================
+   Этап 3: формы студента, прохождение теста, результат
+   ============================================================ */
+
+/* Узкая форма регистрации — по центру, не на всю ширину */
+.form-narrow {
+  max-width: 480px;
+  margin-top: 1rem;
+}
+.form-narrow .btn { margin-top: 1.25rem; }
+
+/* Алерт с сообщением об ошибке валидации */
+.alert {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 1rem;
+  font-weight: 500;
+}
+.alert-error { background: #fde7ec; color: var(--misis-red); border: 1px solid #f7c2cf; }
+
+/* Карточка теста в сетке */
+.test-card { display: flex; flex-direction: column; gap: .5rem; }
+.test-card .badge { align-self: flex-start; margin-bottom: .25rem; }
+.test-card .btn { align-self: flex-start; margin-top: auto; }
+
+/* === Страница прохождения теста === */
+.test-question { margin-bottom: 1rem; }
+.q-head {
+  display: flex;
+  align-items: flex-start;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+.q-num {
+  flex: 0 0 auto;
+  min-width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--misis-blue);
+  color: #fff;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .95rem;
+}
+.q-text { flex: 1 1 auto; font-weight: 600; color: var(--misis-navy); }
+
+/* Бейджи сложности */
+.badge-easy { background: #e7f6e1; color: #2f7a1f; }
+.badge-medium { background: #fff4d6; color: #8a6d12; }
+.badge-logic { background: #f0e4ff; color: #6b3fa0; }
+
+/* Варианты ответов — кликабельные строки-радио */
+.options { display: flex; flex-direction: column; gap: .4rem; }
+.option {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  padding: 10px 14px;
+  border: 1px solid var(--misis-border);
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+  margin: 0;
+}
+.option:hover { border-color: var(--misis-blue); background: #f4f6ff; }
+.option input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--misis-blue);
+  flex: 0 0 auto;
+}
+.option input[type="radio"]:checked + span { font-weight: 600; color: var(--misis-navy); }
+
+/* === Страница результата === */
+.result-card { text-align: center; }
+.result-banner {
+  border-radius: var(--radius);
+  padding: 1.75rem 1rem;
+  margin-bottom: 1.25rem;
+}
+.result-banner.pass { background: #e7f6e1; }
+.result-banner.fail { background: #fde7ec; }
+.result-banner h2 { margin: .5rem 0 .25rem; }
+.score-circle {
+  width: 120px;
+  height: 120px;
+  margin: 0 auto;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.4rem;
+  font-weight: 900;
+  color: #fff;
+}
+.score-circle span { font-size: 1.1rem; font-weight: 500; opacity: .85; }
+.result-banner.pass .score-circle { background: var(--misis-green); }
+.result-banner.fail .score-circle { background: var(--misis-red); }
+
+/* Разбор ответов: подсветка строк */
+.result-table .q-cell { max-width: 420px; }
+tr.row-correct td { background: #f4fbf0; }
+tr.row-wrong td { background: #fef5f7; }
+tr.row-correct:hover td { background: #ebf7e3; }
+tr.row-wrong:hover td { background: #fde7ec; }

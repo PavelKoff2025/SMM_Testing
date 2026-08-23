@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ test.lecture_title }}{% endblock %}
+
+{% set diff_labels = {"easy": "Лёгкий", "medium": "Средний", "logic": "Логика"} %}
+
+{% block content %}
+<section class="card">
+  <h2>{{ test.lecture_title }}</h2>
+  <p class="muted">
+    {{ student.last_name }} {{ student.first_name }}, группа {{ student.group }}.
+    10 вопросов, на каждый — один ответ. Зачёт при ≥ {{ test.pass_threshold }} правильных.
+    У вас только одна попытка, проверьте ответы перед отправкой.
+  </p>
+</section>
+
+<form method="post" action="/student/test/{{ test.id }}/submit">
+  {% for q in test.questions %}
+  <section class="card test-question">
+    <div class="q-head">
+      <span class="q-num">{{ q.number }}</span>
+      <span class="q-text">{{ q.text }}</span>
+      <span class="badge badge-{{ q.difficulty.value }}">{{ diff_labels[q.difficulty.value] }}</span>
+    </div>
+    <div class="options">
+      {% for opt in q.options %}
+      <label class="option">
+        <input type="radio" name="q{{ q.number }}" value="{{ loop.index0 }}" required>
+        <span>{{ opt }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <button class="btn btn-success" type="submit">Отправить ответы</button>
+</form>
+{% endblock %}

@@ -4,11 +4,27 @@
 {% block content %}
 <section class="card">
   <h2>Тесты по лекциям</h2>
-  <p class="muted">Выберите лекцию и пройдите тест. Каждый тест — {{ questions_per_test }} вопросов, зачёт при ≥ {{ pass_threshold }} правильных.</p>
+  <p class="muted">
+    Каждый тест — {{ questions_per_test }} вопросов, зачёт при ≥ {{ pass_threshold }} правильных.
+    Чтобы пройти тест, зарегистрируйтесь в <a href="/student">кабинете студента</a>.
+  </p>
 </section>
 
+{% if tests %}
+<div class="card-grid">
+  {% for t in tests %}
+  <section class="card test-card">
+    <span class="badge badge-open">доступен</span>
+    <h3>{{ t.lecture_title }}</h3>
+    <p class="muted">{{ questions_per_test }} вопросов · зачёт при ≥ {{ pass_threshold }} правильных</p>
+    <a href="/student/test/{{ t.id }}" class="btn">Пройти тест</a>
+  </section>
+  {% endfor %}
+</div>
+{% else %}
 <section class="empty">
-  <p>Список тестов появится здесь после публикации преподавателем.</p>
+  <p>Пока нет открытых тестов.</p>
   <p class="muted">Доступ открывается после того, как лекция прочитана всем группам курса.</p>
 </section>
+{% endif %}
 {% endblock %}

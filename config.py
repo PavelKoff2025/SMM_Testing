@@ -50,3 +50,7 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 SMTP_USER = os.getenv("SMTP_USER", "pkarikov@yandex.ru")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Павел Кофф — преподаватель")
+
+# === Сессия студента (подписанная кука) ===
+# Секрет для подписи сессионной куки (SessionMiddleware). В проде — через .env.
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")

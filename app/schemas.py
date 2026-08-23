@@ -28,7 +28,7 @@ from collections import Counter
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from config import QUESTION_STRUCTURE, QUESTIONS_PER_TEST
+from config import QUESTION_STRUCTURE, QUESTIONS_PER_TEST, STUDENT_EMAIL_DOMAIN
 
 # Допустимые значения сложности — те же, что в models.Difficulty.
 _DIFFICULTIES = ("easy", "medium", "logic")
@@ -107,3 +107,31 @@ def validate_test(data: dict) -> TestIn:
     сообщение об ошибке валидации шло в лог/консоль одной строкой.
     """
     return TestIn.model_validate(data)
+
+
+class StudentRegister(BaseModel):
+    """Данные формы регистрации/входа студента.
+
+    Регистрация без пароля (по README): имя, фамилия, группа, почта @misis.ru.
+    Если почта уже есть в БД — это «вход» существующего студента, иначе — создание.
+    Валидация домена почты здесь, чтобы правило жило в одном месте (как у тестов).
+    """
+    first_name: str = Field(min_length=1, max_length=64)
+    last_name: str = Field(min_length=1, max_length=64)
+    group: str = Field(min_length=1, max_length=32)
+    email: str = Field(min_length=3, max_length=128)
+
+    @field_validator("first_name", "last_name", "group", mode="before")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        # mode="before" — обрезаем пробелы ДО проверки min_length,
+        # иначе строка из одних пробелов прошла бы валидацию, а стала бы пустой.
+        return v.strip() if isinstance(v, str) else v
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _email_domain(cls, v: str) -> str:
+        v = v.strip().lower()
+        if "@" not in v or not v.endswith(STUDENT_EMAIL_DOMAIN):
+            raise ValueError(f"Нужна корпоративная почта {STUDENT_EMAIL_DOMAIN}")
+        return v

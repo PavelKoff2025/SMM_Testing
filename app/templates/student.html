@@ -2,38 +2,99 @@
 {% block title %}Кабинет студента{% endblock %}
 
 {% block content %}
-<section class="card">
-  <h2>Кабинет студента</h2>
-  <p class="muted">Личное пространство для прохождения тестов по курсу. Зарегистрируйтесь один раз — и проходите тесты по мере того, как преподаватель открывает доступ после лекций.</p>
-</section>
 
-<!-- Блок 1: вход / регистрация (форма появится на Этапе 3) -->
+{% if student %}
+{# === Залогинен: тесты + результаты === #}
 <section class="card">
-  <h3>Вход / регистрация</h3>
-  <p class="muted">Здесь будет форма регистрации: имя, фамилия, группа, корпоративная почта <strong>@misis.ru</strong>.</p>
-  <p class="muted">После входа вы увидите доступные тесты и свои результаты.</p>
-  <div class="empty">
-    <p>Форма регистрации появится здесь.</p>
-    <p><a href="/" class="btn btn-outline">К списку тестов</a></p>
+  <div class="row">
+    <h2 style="margin:0">Кабинет студента</h2>
+    <span class="spacer"></span>
+    <form method="post" action="/student/logout" style="margin:0">
+      <button class="btn btn-outline" type="submit">Выйти</button>
+    </form>
   </div>
+  <p class="muted">
+    Вы вошли как <strong>{{ student.last_name }} {{ student.first_name }}</strong>,
+    группа {{ student.group }} ({{ student.email }})
+  </p>
 </section>
 
-<!-- Блок 2: доступные тесты -->
 <section class="card">
   <h3>Доступные тесты</h3>
-  <p class="muted">Тесты открываются после того, как лекция прочитана всем группам курса.</p>
+  <p class="muted">Тесты открываются после того, как лекция прочитана всем группам курса. На каждый тест — одна попытка.</p>
+  {% if tests %}
+  <div class="card-grid">
+    {% for t in tests %}
+    <div class="card test-card">
+      <span class="badge badge-open">доступен</span>
+      <h3>{{ t.lecture_title }}</h3>
+      <p class="muted">{{ questions_per_test }} вопросов · зачёт при ≥ {{ pass_threshold }} правильных</p>
+      <a href="/student/test/{{ t.id }}" class="btn">Пройти тест</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
   <div class="empty">
     <p>Пока нет доступных тестов.</p>
     <p class="muted">Когда преподаватель откроет тест, он появится здесь.</p>
   </div>
+  {% endif %}
 </section>
 
-<!-- Блок 3: мои результаты -->
 <section class="card">
   <h3>Мои результаты</h3>
-  <p class="muted">Здесь будет ваш прогресс по всем тестам: зачёт / незачёт, число правильных ответов и допуск к финальному зачёту.</p>
-  <div class="empty">
-    <p>Вы ещё не проходили тесты.</p>
-  </div>
+  {% if attempts %}
+  <table>
+    <thead>
+      <tr><th>Лекция</th><th>Правильных</th><th>Результат</th></tr>
+    </thead>
+    <tbody>
+      {% for a in attempts %}
+      <tr>
+        <td><a href="/student/result/{{ a.id }}">{{ a.test.lecture_title }}</a></td>
+        <td>{{ a.score }} / {{ questions_per_test }}</td>
+        <td>
+          {% if a.passed %}<span class="badge badge-pass">Зачёт</span>
+          {% else %}<span class="badge badge-fail">Незачёт</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty"><p>Вы ещё не проходили тесты.</p></div>
+  {% endif %}
 </section>
+
+{% else %}
+{# === Не залогинен: форма регистрации/входа === #}
+<section class="card">
+  <h2>Вход / регистрация</h2>
+  <p class="muted">Зарегистрируйтесь один раз — и проходите тесты по мере того, как преподаватель открывает доступ после лекций. Если вы уже регистрировались — просто укажите ту же почту, это вход.</p>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/student/register" class="form-narrow">
+    <label for="first_name">Имя</label>
+    <input type="text" id="first_name" name="first_name" required maxlength="64"
+           value="{{ form.first_name if form else '' }}">
+
+    <label for="last_name">Фамилия</label>
+    <input type="text" id="last_name" name="last_name" required maxlength="64"
+           value="{{ form.last_name if form else '' }}">
+
+    <label for="group">Группа</label>
+    <input type="text" id="group" name="group" required maxlength="32"
+           value="{{ form.group if form else '' }}">
+
+    <label for="email">Корпоративная почта (@misis.ru)</label>
+    <input type="email" id="email" name="email" required maxlength="128"
+           pattern="[^@\s]+@misis\.ru" title="почта вида login@misis.ru"
+           value="{{ form.email if form else '' }}">
+
+    <button class="btn" type="submit">Войти / зарегистрироваться</button>
+  </form>
+</section>
+{% endif %}
+
 {% endblock %}

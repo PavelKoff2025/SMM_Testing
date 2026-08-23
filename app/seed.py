@@ -11,6 +11,8 @@
     python -m app.seed --reset                  # удалить и пересоздать таблицы (стирает данные)
     python -m app.seed --load-demo              # залить демо-тест лекции 1 в БД
     python -m app.seed --reset --load-demo       # чистая БД + демо-тест (удобно при разработке)
+    python -m app.seed --open-demo              # открыть демо-тест (status=open) — доступен студентам
+    python -m app.seed --reset --load-demo --open-demo  # чистая БД + демо-тест сразу открытый
 
 Под капотом:
     --reset делает Base.metadata.drop_all() затем create_all().
@@ -56,10 +58,36 @@ def load_demo() -> None:
         db.close()
 
 
+def open_demo() -> None:
+    """Открыть демо-тест лекции 1 (status=open) — чтобы он был виден студентам.
+
+    Заменяет ручное действие преподавателя «Открыть доступ», которое в проде
+    делается из кабинета преподавателя (Этап 5). Удобно при локальной разработке.
+    """
+    from app.models import Test, TestStatus
+
+    db = SessionLocal()
+    try:
+        test = db.query(Test).filter(
+            Test.lecture_title == "Лекция 1. Введение в SMM"
+        ).one_or_none()
+        if test is None:
+            print("Демо-тест не найден — сначала загрузите его: python -m app.seed --load-demo")
+            return
+        test.status = TestStatus.open
+        db.commit()
+        print(f"Тест #{test.id} «{test.lecture_title}» открыт (status=open).")
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     reset = "--reset" in args
     load = "--load-demo" in args
+    open_flag = "--open-demo" in args
     init(reset=reset)
     if load:
         load_demo()
+    if open_flag:
+        open_demo()
