@@ -13,13 +13,15 @@
   • допуск к зачёту — Этап 9.
 Здесь — каркас кабинета с авторизацией, приёмом файлов и ручной публикацией.
 """
+import csv
 import hmac
+import io
 import json
 import uuid
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 import config
@@ -31,6 +33,7 @@ from app.services.analytics import (
     attempts_summary,
     difficulty_error_stats,
 )
+from app.services.admission import admission_report, admission_summary
 from app.services.pdf_parser import PdfParseError, extract_text
 from app.services.scheduler import local_to_utc, utc_to_local
 from app.services.test_loader import attach_questions, load_test_from_data
@@ -522,4 +525,68 @@ async def teacher_attempt_view(attempt_id: int, request: Request, db: Session = 
             "diff_labels": DIFF_LABELS,
             "questions_per_test": config.QUESTIONS_PER_TEST,
         },
+    )
+
+
+# === Допуск к зачёту (Этап 9): итоговая таблица + экспорт CSV ===
+
+@router.get("/teacher/admission", response_class=HTMLResponse)
+async def teacher_admission(request: Request, db: Session = Depends(get_db)):
+    """Итоговая таблица допуска к финальному зачёту по каждому студенту."""
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    report = admission_report(db)
+    summary = admission_summary(report)
+    flash, err = _consume_flash(request)
+    return _templates(request).TemplateResponse(
+        request,
+        "teacher_admission.html",
+        {
+            "title": "Допуск к зачёту",
+            "report": report,
+            "summary": summary,
+            "tests_required": config.ADMISSION_TESTS_REQUIRED,
+            "correct_required": config.ADMISSION_CORRECT_REQUIRED,
+            "total_questions": config.ADMISSION_TOTAL,
+            "flash": flash,
+            "error": err,
+        },
+    )
+
+
+@router.get("/teacher/admission.csv")
+async def teacher_admission_csv(request: Request, db: Session = Depends(get_db)):
+    """Экспорт итоговой таблицы допуска в CSV (UTF-8 с BOM для Excel)."""
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    report = admission_report(db)
+
+    # BOM (﻿) в начале — чтобы Excel на Windows корректно показывал кириллицу.
+    buffer = io.StringIO()
+    buffer.write("﻿")
+    writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
+    writer.writerow(
+        ["Фамилия", "Имя", "Группа", "Email", "Пройдено тестов",
+         "Зачтено", "Правильных ответов", "Допуск"]
+    )
+    for r in report:
+        writer.writerow([
+            r.last_name, r.first_name, r.group, r.email,
+            r.taken, r.passed, r.total_correct,
+            "допущен" if r.admitted else "не допущен",
+        ])
+
+    # Имя файла по нейминг-формуле проекта: [дата]_[тема]_[тип].[расширение]
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    filename = f"{today}_admission_report.csv"
+    data = buffer.getvalue().encode("utf-8")
+
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

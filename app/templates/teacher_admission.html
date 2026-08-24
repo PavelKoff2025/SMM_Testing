@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Допуск к зачёту · кабинет преподавателя{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="row">
+    <h2 style="margin:0">Допуск к зачёту</h2>
+    <span class="spacer"></span>
+    <a href="/teacher/admission.csv" class="btn">⬇ Экспорт CSV</a>
+    <a href="/teacher" class="btn btn-outline">← В кабинет</a>
+  </div>
+  <p class="muted">
+    Критерий допуска: пройдено все {{ tests_required }} тестов <strong>и</strong>
+    минимум {{ correct_required }} правильных ответов из {{ total_questions }}.
+  </p>
+</section>
+
+{% if flash %}<div class="alert alert-success">{{ flash }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+{# === Сводка === #}
+<section class="card">
+  <div class="stat-row">
+    <div class="stat"><span class="stat-num">{{ summary.total }}</span><span class="stat-label">студентов</span></div>
+    <div class="stat"><span class="stat-num">{{ summary.admitted }}</span><span class="stat-label">допущено</span></div>
+    <div class="stat"><span class="stat-num">{{ summary.not_admitted }}</span><span class="stat-label">не допущено</span></div>
+  </div>
+</section>
+
+{# === Таблица допуска === #}
+<section class="card">
+  <h3>Студенты</h3>
+  {% if report %}
+  <table>
+    <thead>
+      <tr>
+        <th>Студент</th><th>Группа</th>
+        <th>Пройдено</th><th>Зачтено</th><th>Правильных</th><th>Допуск</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in report %}
+      <tr>
+        <td>{{ r.last_name }} {{ r.first_name }}<br><span class="muted">{{ r.email }}</span></td>
+        <td>{{ r.group }}</td>
+        <td>{{ r.taken }} / {{ tests_required }}</td>
+        <td>{{ r.passed }}</td>
+        <td>{{ r.total_correct }} / {{ total_questions }}</td>
+        <td>
+          {% if r.admitted %}<span class="badge badge-pass">допущен</span>
+          {% else %}<span class="badge badge-fail">не допущен</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty"><p>Студентов пока нет. Когда они пройдут тесты — здесь появится таблица допуска.</p></div>
+  {% endif %}
+</section>
+{% endblock %}
