@@ -45,7 +45,7 @@
       </form>
     {% endif %}
     {% if test.source.value == "pdf" %}
-      <form method="post" action="/teacher/test/{{ test.id }}/generate" style="margin:0">
+      <form method="post" action="/teacher/test/{{ test.id }}/generate" style="margin:0" data-disable-on-submit>
         <button class="btn" type="submit"
                 {% if test.status.value in ("open", "closed") %}disabled{% endif %}>
           ⚡ Сгенерировать вопросы из PDF

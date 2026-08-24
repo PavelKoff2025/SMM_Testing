@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Ошибка {{ error_code }}{% endblock %}
+
+{% block content %}
+<section class="card">
+  <h2>Ошибка {{ error_code }}</h2>
+  <p>{{ error_message }}</p>
+  {% if error_code == 404 %}
+    <p class="muted">Проверьте адрес или вернитесь на главную.</p>
+  {% elif error_code == 500 %}
+    <p class="muted">Что-то пошло не так на сервере. Если вы проходили тест — результат сохранён, попробуйте зайти в кабинет позже. Сообщите преподавателю, если ошибка повторяется.</p>
+  {% endif %}
+  <p>
+    <a href="/" class="btn">← На главную</a>
+    <a href="/student" class="btn btn-outline">Кабинет студента</a>
+  </p>
+</section>
+{% endblock %}

@@ -52,7 +52,7 @@
   <section class="card">
     <h3>Загрузить готовый JSON-тест</h3>
     <p class="muted">Файл формата <code>{"lecture_title", "questions": [...]}</code> с 10 вопросами в пропорции 4/4/2. Тест создаётся как черновик.</p>
-    <form method="post" action="/teacher/upload/json" enctype="multipart/form-data">
+    <form method="post" action="/teacher/upload/json" enctype="multipart/form-data" data-disable-on-submit>
       <label for="json_file">JSON-файл</label>
       <input type="file" id="json_file" name="file" accept=".json" required>
       <button class="btn" type="submit">Загрузить</button>
@@ -62,7 +62,7 @@
   <section class="card">
     <h3>Загрузить PDF-презентацию</h3>
     <p class="muted">PDF лекции → автогенерация 10 вопросов 4/4/2 (GPT-4o-mini, <strong>этап 6</strong>). Пока файл сохраняется как черновик без вопросов.</p>
-    <form method="post" action="/teacher/upload/pdf" enctype="multipart/form-data">
+    <form method="post" action="/teacher/upload/pdf" enctype="multipart/form-data" data-disable-on-submit>
       <label for="pdf_title">Название лекции</label>
       <input type="text" id="pdf_title" name="lecture_title" required maxlength="255">
       <label for="pdf_file">PDF-файл</label>

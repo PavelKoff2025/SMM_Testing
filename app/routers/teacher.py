@@ -42,6 +42,32 @@ router = APIRouter()
 
 ALLOWED_JSON_EXT = (".json",)
 ALLOWED_PDF_EXT = (".pdf",)
+# Максимальная длина названия лекции — колонка String(255) в БД.
+_MAX_LECTURE_TITLE = 255
+
+
+class _UploadTooLarge(Exception):
+    """Сигнал: размер файла превысил MAX_UPLOAD_BYTES. Ловится в роутах загрузки."""
+
+
+async def _read_limited(file: UploadFile, max_bytes: int) -> bytes:
+    """Прочитать файл порциями, отбивая превышение max_bytes — защита от OOM.
+
+    Content-Length из multipart не точен (boundary overhead), поэтому считаем
+    байты по факту, а не по заголовку. Чтение кусками по 1 МБ не грузит весь файл
+    в память одним куском.
+    """
+    total = 0
+    out = bytearray()
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise _UploadTooLarge(max_bytes)
+        out.extend(chunk)
+    return bytes(out)
 
 
 def _templates(request: Request):
@@ -49,8 +75,9 @@ def _templates(request: Request):
 
 
 def _require_teacher(request: Request):
-    """Если преподаватель не вошёл — редирект на форму входа, иначе None."""
+    """Если преподаватель не вошёл — редирект на форму входа с flash, иначе None."""
     if not request.session.get("teacher"):
+        _flash(request, "Нужно войти в кабинет преподавателя (пароль из .env).", error=True)
         return RedirectResponse("/teacher", status_code=303)
     return None
 
@@ -131,6 +158,9 @@ async def teacher_login(request: Request, password: str = Form(...)):
     if not ok:
         _flash(request, "Неверный пароль", error=True)
         return RedirectResponse("/teacher", status_code=303)
+    # Регенерация сессии при входе — защита от session fixation: очищаем
+    # предыдущую куку, Starlette перевыпустит подпись с новым флагом teacher.
+    request.session.clear()
     request.session["teacher"] = True
     return RedirectResponse("/teacher", status_code=303)
 
@@ -156,7 +186,16 @@ async def upload_json(request: Request, file: UploadFile, db: Session = Depends(
         return RedirectResponse("/teacher", status_code=303)
 
     try:
-        raw = await file.read()
+        raw = await _read_limited(file, config.MAX_UPLOAD_BYTES)
+    except _UploadTooLarge:
+        _flash(
+            request,
+            f"Файл слишком большой (макс. {config.MAX_UPLOAD_BYTES // (1024 * 1024)} МБ).",
+            error=True,
+        )
+        return RedirectResponse("/teacher", status_code=303)
+
+    try:
         data = json.loads(raw.decode("utf-8"))
         created, test = load_test_from_data(data, db)
     except json.JSONDecodeError:
@@ -198,6 +237,9 @@ async def upload_pdf(
     if not lecture_title:
         _flash(request, "Укажите название лекции", error=True)
         return RedirectResponse("/teacher", status_code=303)
+    if len(lecture_title) > _MAX_LECTURE_TITLE:
+        _flash(request, f"Название лекции слишком длинное (макс. {_MAX_LECTURE_TITLE} симв.).", error=True)
+        return RedirectResponse("/teacher", status_code=303)
 
     # Идемпотентность: не создаём дубль по названию лекции.
     existing = db.query(Test).filter(Test.lecture_title == lecture_title).one_or_none()
@@ -205,11 +247,29 @@ async def upload_pdf(
         _flash(request, f"Тест «{lecture_title}» уже существует — пропущен.")
         return RedirectResponse("/teacher", status_code=303)
 
+    # Читаем файл с лимитом размера — защита от OOM/DoS.
+    try:
+        content = await _read_limited(file, config.MAX_UPLOAD_BYTES)
+    except _UploadTooLarge:
+        _flash(
+            request,
+            f"PDF слишком большой (макс. {config.MAX_UPLOAD_BYTES // (1024 * 1024)} МБ).",
+            error=True,
+        )
+        return RedirectResponse("/teacher", status_code=303)
+
+    # Имя файла на диске — только UUID + .pdf. Оригинальное имя не используем:
+    # это полностью исключает path traversal (filename от клиента мог содержать
+    # '../') и битые имена. Идемпотентности по файлу нет, но по названию лекции выше.
     config.UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    stored_name = f"{uuid.uuid4().hex}_{file.filename}"
+    stored_name = f"{uuid.uuid4().hex}.pdf"
     saved_path = config.UPLOADS_DIR / stored_name
-    content = await file.read()
-    saved_path.write_bytes(content)
+
+    try:
+        saved_path.write_bytes(content)
+    except OSError as e:
+        _flash(request, f"Не удалось сохранить файл: {e}", error=True)
+        return RedirectResponse("/teacher", status_code=303)
 
     try:
         test = Test(
@@ -229,6 +289,11 @@ async def upload_pdf(
         )
     except Exception as e:
         db.rollback()
+        # Файл-сирота при откате БД — убираем, чтобы не копить мусор.
+        try:
+            saved_path.unlink(missing_ok=True)
+        except OSError:
+            pass
         _flash(request, f"Ошибка сохранения теста: {e}", error=True)
     return RedirectResponse("/teacher", status_code=303)
 

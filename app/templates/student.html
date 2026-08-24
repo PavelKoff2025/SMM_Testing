@@ -73,6 +73,7 @@
   <p class="muted">Зарегистрируйтесь один раз — и проходите тесты по мере того, как преподаватель открывает доступ после лекций. Если вы уже регистрировались — просто укажите ту же почту, это вход.</p>
 
   {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+  {% if info %}<div class="alert alert-{% if info_error %}error{% else %}success{% endif %}">{{ info }}</div>{% endif %}
 
   <form method="post" action="/student/register" class="form-narrow">
     <label for="first_name">Имя</label>

@@ -28,5 +28,22 @@
   <footer class="site-footer">
     <div>© Павел Кариков · Курс «Взаимодействие с социальными медиа» · SMM Testing</div>
   </footer>
+
+  <script>
+    // Индикатор долгих операций: формы с data-disable-on-submit блокируют
+    // кнопку submit и меняют текст на «Подождите…», чтобы пользователь не кликал
+    // повторно (AI-генерация ~15–20с, загрузка PDF). Без зависимостей.
+    (function () {
+      document.addEventListener('submit', function (e) {
+        var f = e.target;
+        if (!f || f.tagName !== 'FORM' || !f.hasAttribute('data-disable-on-submit')) return;
+        var btn = f.querySelector('[type=submit]');
+        if (!btn || btn.disabled) return;
+        btn.setAttribute('data-label', btn.textContent.trim());
+        btn.disabled = true;
+        btn.textContent = 'Подождите…';
+      }, true);
+    })();
+  </script>
 </body>
 </html>

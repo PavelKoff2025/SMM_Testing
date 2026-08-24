@@ -37,8 +37,17 @@ ADMISSION_TOTAL = 90                # всего вопросов по курс�
 # === Студенты ===
 STUDENT_EMAIL_DOMAIN = "@misis.ru"  # проверка домена при регистрации
 
+# === Окружение ===
+# dev — локальная разработка/демо: допускаются рабочие дефолты секретов.
+# prod — боевое: обязательна проверка, что TEACHER_PASSWORD и SECRET_KEY заданы
+#        и не равны небезопасным дефолтам (иначе старт падает — см. ensure_prod_secrets).
+APP_ENV = os.getenv("APP_ENV", "dev").strip().lower()
+IS_PROD = APP_ENV == "prod"
+
 # === Преподаватель (доступ к кабинету) ===
-TEACHER_PASSWORD = os.getenv("TEACHER_PASSWORD", "changeme")
+# В prod пароль обязан быть задан через env и отличаться от дефолта.
+_DEFAULT_TEACHER_PASSWORD = "changeme"
+TEACHER_PASSWORD = os.getenv("TEACHER_PASSWORD", _DEFAULT_TEACHER_PASSWORD)
 
 # === OpenAI (генерация тестов из PDF) ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -57,10 +66,40 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 SMTP_USER = os.getenv("SMTP_USER", "pkarikov@yandex.ru")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Павел Кофф — преподаватель")
+# Выключатель отправки: 0 — не пытаться отправлять (результат виден в кабинете),
+# 1 — отправлять через SMTP. По умолчанию выключено, чтобы не падать без пароля.
+SMTP_ENABLED = os.getenv("SMTP_ENABLED", "0") == "1"
+SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "20"))
 
 # === Сессия студента (подписанная кука) ===
 # Секрет для подписи сессионной куки (SessionMiddleware). В проде — через .env.
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+_DEFAULT_SECRET_KEY = "dev-secret-change-me"
+SECRET_KEY = os.getenv("SECRET_KEY", _DEFAULT_SECRET_KEY)
+
+# Лимит размера загружаемого файла (PDF/JSON) — защита от OOM/DoS.
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(26 * 1024 * 1024)))
+
+
+def ensure_prod_secrets() -> None:
+    """Проверка секретов в prod: старт должен падать, если безопасность невозможна.
+
+    В dev — no-op (рабочие дефолты допустимы для локальной разработки/демо).
+    В prod — TEACHER_PASSWORD и SECRET_KEY обязаны быть заданы и не равны
+    небезопасным дефолтам. Вызывается из lifespan (main.py) при старте.
+    """
+    if not IS_PROD:
+        return
+    problems: list[str] = []
+    if TEACHER_PASSWORD == _DEFAULT_TEACHER_PASSWORD:
+        problems.append("TEACHER_PASSWORD не задан (используется дефолт 'changeme')")
+    if not SECRET_KEY or SECRET_KEY == _DEFAULT_SECRET_KEY:
+        problems.append("SECRET_KEY не задан (используется публично известный дефолт)")
+    if problems:
+        raise RuntimeError(
+            "Запуск в prod отменён — небезопасные секреты: "
+            + "; ".join(problems)
+            + ". Задайте их в .env."
+        )
 
 # === Расписание тестов (Этап 7, APScheduler) ===
 # Часовой пояс ввода/вывода для преподавателя: форму datetime-local трактуем

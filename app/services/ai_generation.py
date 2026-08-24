@@ -167,7 +167,8 @@ def _call_openai(text: str, lecture_title: str) -> dict:
     зависимость в мок-режим (и при отсутствии пакета мок всё равно работает)."""
     from openai import OpenAI
 
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    # timeout защищает от «вечного зависания» запроса (сеть, зависание модели).
+    client = OpenAI(api_key=config.OPENAI_API_KEY, timeout=60.0)
     user_prompt = (
         f"Название лекции: {lecture_title}.\n\n"
         f"Текст лекции (извлечён из PDF):\n{text}\n\n"
@@ -187,7 +188,14 @@ def _call_openai(text: str, lecture_title: str) -> dict:
     except Exception as e:
         raise AiGenerationError(f"Ошибка вызова OpenAI: {e}") from e
 
-    content = resp.choices[0].message.content
+    # Модель может вернуть пустой choices (content-filter, лимит, сбой) —
+    # не даём IndexError всплыть как 500, превращаем в понятную ошибку генерации.
+    if not resp.choices:
+        raise AiGenerationError("OpenAI вернул пустой список choices (нет ответа модели).")
+    try:
+        content = resp.choices[0].message.content
+    except (AttributeError, IndexError) as e:
+        raise AiGenerationError(f"OpenAI вернул некорректный ответ: {e}") from e
     if not content or not content.strip():
         raise AiGenerationError("OpenAI вернул пустой ответ.")
 
