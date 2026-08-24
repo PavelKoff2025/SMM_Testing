@@ -16,6 +16,7 @@
 import hmac
 import json
 import uuid
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -25,7 +26,13 @@ import config
 from app.database import get_db
 from app.models import Attempt, Student, Test, TestSource, TestStatus
 from app.services.ai_generation import AiConfigError, AiGenerationError, generate_test
+from app.services.analytics import (
+    attempt_breakdown,
+    attempts_summary,
+    difficulty_error_stats,
+)
 from app.services.pdf_parser import PdfParseError, extract_text
+from app.services.scheduler import local_to_utc, utc_to_local
 from app.services.test_loader import attach_questions, load_test_from_data
 
 router = APIRouter()
@@ -83,10 +90,17 @@ def _dashboard(request: Request, db: Session) -> HTMLResponse:
     for t in tests:
         # число попыток по каждому тесту (без доп. запроса на каждый — простота важнее)
         t._attempts_count = db.query(Attempt).filter(Attempt.test_id == t.id).count()
+        # время расписания в московском времени для колонки «Расписание»
+        t._scheduled_msk = (
+            utc_to_local(t.scheduled_at).strftime("%d.%m.%Y %H:%M")
+            if t.scheduled_at is not None
+            else ""
+        )
 
     stats = {
         "tests_total": len(tests),
         "draft": sum(1 for t in tests if t.status == TestStatus.draft),
+        "scheduled": sum(1 for t in tests if t.status == TestStatus.scheduled),
         "open": sum(1 for t in tests if t.status == TestStatus.open),
         "students": db.query(Student).count(),
         "attempts": db.query(Attempt).count(),
@@ -231,6 +245,16 @@ async def teacher_test_preview(test_id: int, request: Request, db: Session = Dep
 
     can_open = len(test.questions) == config.QUESTIONS_PER_TEST
     flash, err = _consume_flash(request)
+
+    # Время расписания для шаблона: в московском времени (для показа и для
+    # предзаполнения поля datetime-local, формат YYYY-MM-DDTHH:MM).
+    scheduled_at_msk = None
+    scheduled_at_value = None
+    if test.scheduled_at is not None:
+        local = utc_to_local(test.scheduled_at)
+        scheduled_at_msk = local.strftime("%d.%m.%Y %H:%M (МСК)")
+        scheduled_at_value = local.strftime("%Y-%m-%dT%H:%M")
+
     return _templates(request).TemplateResponse(
         request,
         "teacher_test.html",
@@ -240,6 +264,9 @@ async def teacher_test_preview(test_id: int, request: Request, db: Session = Dep
             "can_open": can_open,
             "questions_per_test": config.QUESTIONS_PER_TEST,
             "ai_mock": config.AI_MOCK,
+            "scheduled_at_msk": scheduled_at_msk,
+            "scheduled_at_value": scheduled_at_value,
+            "schedule_tz": config.SCHEDULE_TZ,
             "flash": flash,
             "error": err,
         },
@@ -281,6 +308,94 @@ async def test_close(test_id: int, request: Request, db: Session = Depends(get_d
     test.status = TestStatus.closed
     db.commit()
     _flash(request, f"Тест «{test.lecture_title}» закрыт.")
+    return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+
+# === Расписание (Этап 7): scheduled → автооткрытие по времени ===
+
+# Допуск по времени: разрешаем планировать «в прошлое» не дальше чем на минуту,
+# чтобы ручной ввод прямо сейчас не отбрасывался из-за секундного рассинхрона.
+_SCHEDULE_PAST_GRACE = timedelta(minutes=1)
+
+
+@router.post("/teacher/test/{test_id}/schedule")
+async def test_schedule(
+    test_id: int,
+    request: Request,
+    scheduled_at: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Запланировать автооткрытие теста (draft/closed/scheduled → scheduled).
+
+    Преподаватель вводит дату/время в московской зоне (поле datetime-local).
+    Сервер конвертирует Europe/Moscow → UTC и сохраняет в scheduled_at.
+    Планировщик (app.services.scheduler) откроет тест, когда время наступит.
+    """
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    test = db.get(Test, test_id)
+    if test is None:
+        raise HTTPException(404, "Тест не найден")
+
+    def back(msg: str):
+        _flash(request, msg, error=True)
+        return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+    # Нельзя запланировать уже открытый тест — сначала закройте его.
+    if test.status == TestStatus.open:
+        return back("Тест уже открыт. Чтобы запланировать — сначала закройте его.")
+
+    # Для автооткрытия у теста должны быть 10 вопросов.
+    if len(test.questions) != config.QUESTIONS_PER_TEST:
+        return back(
+            f"Нельзя запланировать тест без {config.QUESTIONS_PER_TEST} вопросов "
+            f"(сейчас {len(test.questions)})."
+        )
+
+    # Парсим «YYYY-MM-DDTHH:MM» из datetime-local как московское время.
+    try:
+        naive_local = datetime.strptime(scheduled_at.strip(), "%Y-%m-%dT%H:%M")
+    except ValueError:
+        return back("Неверный формат даты/времени. Используйте поле выбора даты.")
+
+    try:
+        utc_dt = local_to_utc(naive_local)
+    except Exception:
+        return back(f"Не удалось распознать часовой пояс «{config.SCHEDULE_TZ}».")
+
+    # Время должно быть в будущем (с допуском в минуту).
+    if utc_dt < datetime.utcnow() - _SCHEDULE_PAST_GRACE:
+        return back("Укажите время в будущем.")
+
+    test.status = TestStatus.scheduled
+    test.scheduled_at = utc_dt
+    db.commit()
+    msk = utc_to_local(utc_dt).strftime("%d.%m.%Y %H:%M")
+    _flash(request, f"Тест «{test.lecture_title}» откроется автоматически: {msk} (МСК).")
+    return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+
+@router.post("/teacher/test/{test_id}/unschedule")
+async def test_unschedule(test_id: int, request: Request, db: Session = Depends(get_db)):
+    """Отменить расписание теста (scheduled → draft, scheduled_at=None)."""
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    test = db.get(Test, test_id)
+    if test is None:
+        raise HTTPException(404, "Тест не найден")
+
+    if test.status != TestStatus.scheduled:
+        _flash(request, "Тест не запланирован — нечего отменять.", error=True)
+        return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+    test.status = TestStatus.draft
+    test.scheduled_at = None
+    db.commit()
+    _flash(request, f"Расписание теста «{test.lecture_title}» отменено, тест — черновик.")
     return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
 
 
@@ -343,3 +458,68 @@ async def test_generate(test_id: int, request: Request, db: Session = Depends(ge
     mode = "мок" if config.AI_MOCK else "GPT-4o-mini"
     _flash(request, f"Сгенерировано {inserted} вопросов из PDF ({mode}).")
     return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+
+# === Аналитика (Этап 8): сводная таблица попыток + ошибки по сложности ===
+
+DIFF_LABELS = {"easy": "Лёгкий", "medium": "Средний", "logic": "Логика"}
+
+
+@router.get("/teacher/analytics", response_class=HTMLResponse)
+async def teacher_analytics(request: Request, db: Session = Depends(get_db)):
+    """Аналитика для преподавателя: ошибки по сложности + сводная таблица попыток."""
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    diff_stats = difficulty_error_stats(db)
+    attempts = attempts_summary(db)
+
+    flash, err = _consume_flash(request)
+    return _templates(request).TemplateResponse(
+        request,
+        "teacher_analytics.html",
+        {
+            "title": "Аналитика",
+            "diff_stats": diff_stats,
+            "diff_labels": DIFF_LABELS,
+            "attempts": attempts,
+            "questions_per_test": config.QUESTIONS_PER_TEST,
+            "flash": flash,
+            "error": err,
+        },
+    )
+
+
+@router.get("/teacher/attempt/{attempt_id}", response_class=HTMLResponse)
+async def teacher_attempt_view(attempt_id: int, request: Request, db: Session = Depends(get_db)):
+    """Разбор одной попытки: все 10 вопросов с выбором студента и правильным ответом.
+
+    Вид преподавателя — аналогичен result.html студента, но без студенческой
+    навигации и с указанием ФИО/группы студента.
+    """
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    attempt = db.get(Attempt, attempt_id)
+    if attempt is None:
+        raise HTTPException(404, "Попытка не найдена")
+
+    rows = attempt_breakdown(attempt)
+    test = attempt.test
+    student = attempt.student
+
+    return _templates(request).TemplateResponse(
+        request,
+        "teacher_attempt.html",
+        {
+            "title": "Разбор попытки",
+            "attempt": attempt,
+            "test": test,
+            "student": student,
+            "rows": rows,
+            "diff_labels": DIFF_LABELS,
+            "questions_per_test": config.QUESTIONS_PER_TEST,
+        },
+    )

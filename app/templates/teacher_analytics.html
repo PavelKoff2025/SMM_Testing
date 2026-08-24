@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Аналитика · кабинет преподавателя{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="row">
+    <h2 style="margin:0">Аналитика</h2>
+    <span class="spacer"></span>
+    <a href="/teacher" class="btn btn-outline">← В кабинет</a>
+  </div>
+  <p class="muted">Ошибки студентов по уровням сложности и сводная таблица всех попыток.</p>
+</section>
+
+{% if flash %}<div class="alert alert-success">{{ flash }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+{# === Ошибки по сложности === #}
+<section class="card">
+  <h3>Ошибки по сложности</h3>
+  <p class="muted">Где студенты ошибаются чаще всего. Процент — доля неверных ответов от всех ответов данного уровня.</p>
+  <div class="stat-row">
+    {% for key in ["easy", "medium", "logic"] %}
+    {% set s = diff_stats[key] %}
+    <div class="stat">
+      <span class="stat-num">{{ s.wrong }}/{{ s.total }}</span>
+      <span class="stat-label">{{ diff_labels[key] }} · {{ s.error_rate }}% ошибок</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+{# === Сводная таблица попыток === #}
+<section class="card">
+  <h3>Попытки ({{ attempts|length }})</h3>
+  {% if attempts %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Студент</th><th>Группа</th><th>Тест</th>
+        <th>Балл</th><th>Оценка</th><th>Ошибок</th><th>Дата</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in attempts %}
+      <tr>
+        <td>{{ a.id }}</td>
+        <td>{{ a.student_name }}</td>
+        <td>{{ a.group }}</td>
+        <td><a href="/teacher/test/{{ a.test_id }}">{{ a.lecture_title }}</a></td>
+        <td>{{ a.score }}/{{ questions_per_test }}</td>
+        <td>
+          {% if a.passed %}<span class="badge badge-pass">зачёт</span>
+          {% else %}<span class="badge badge-fail">незачёт</span>{% endif %}
+        </td>
+        <td>{{ a.wrong_count }}</td>
+        <td class="muted">{{ a.finished_at.strftime('%d.%m.%Y %H:%M') if a.finished_at else '—' }}</td>
+        <td class="action-links">
+          <a href="/teacher/attempt/{{ a.id }}">Разбор</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty"><p>Попыток пока нет. Когда студенты пройдут тесты — здесь появится сводная таблица.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

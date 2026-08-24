@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Разбор попытки #{{ attempt.id }} · кабинет преподавателя{% endblock %}
+
+{% block content %}
+<section class="card result-card">
+  <div class="result-banner {{ 'pass' if attempt.passed else 'fail' }}">
+    <div class="score-circle">{{ attempt.score }}<span>/{{ questions_per_test }}</span></div>
+    <h2>{% if attempt.passed %}Зачёт{% else %}Незачёт{% endif %}</h2>
+    <p class="muted">{{ test.lecture_title }}</p>
+  </div>
+  <p class="muted">
+    <strong>{{ student.last_name }} {{ student.first_name }}</strong>, группа {{ student.group }}.
+    Правильных ответов: <strong>{{ attempt.score }}</strong> из {{ questions_per_test }}.
+    Порог зачёта: {{ test.pass_threshold }}.
+  </p>
+  <a href="/teacher/analytics" class="btn btn-outline">← К таблице попыток</a>
+</section>
+
+<section class="card">
+  <h3>Разбор ответов</h3>
+  <p class="muted">Зелёным — верные ответы, красным — ошибочные. Показаны выбор студента и правильный вариант.</p>
+  <table class="result-table">
+    <thead>
+      <tr><th>#</th><th>Сложность</th><th>Вопрос</th><th>Ответ студента</th><th>Правильный</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="{{ 'row-correct' if r.is_correct else 'row-wrong' }}">
+        <td>{{ r.number }}</td>
+        <td><span class="badge badge-{{ r.difficulty }}">{{ diff_labels[r.difficulty] }}</span></td>
+        <td class="q-cell">{{ r.text }}</td>
+        <td>{{ r.student_answer }}</td>
+        <td>{{ r.correct_answer }}</td>
+        <td>
+          {% if r.is_correct %}<span class="badge badge-pass">верно</span>
+          {% else %}<span class="badge badge-fail">ошибка</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

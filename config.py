@@ -61,3 +61,10 @@ SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Павел Кофф — препо
 # === Сессия студента (подписанная кука) ===
 # Секрет для подписи сессионной куки (SessionMiddleware). В проде — через .env.
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+
+# === Расписание тестов (Этап 7, APScheduler) ===
+# Часовой пояс ввода/вывода для преподавателя: форму datetime-local трактуем
+# как это локальное время, внутри храним и сравниваем UTC.
+SCHEDULE_TZ = os.getenv("SCHEDULE_TZ", "Europe/Moscow")
+# Как часто планировщик проверяет, не наступило ли время scheduled-тестов.
+SCHEDULER_INTERVAL_SECONDS = int(os.getenv("SCHEDULER_INTERVAL_SECONDS", "30"))

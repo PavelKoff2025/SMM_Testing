@@ -57,6 +57,41 @@
       </span>
     {% endif %}
   </div>
+
+  {% if test.status.value == "scheduled" %}
+    <div class="alert alert-success" style="margin-top:1rem">
+      Запланировано автооткрытие: <strong>{{ scheduled_at_msk }}</strong>.
+      В назначенное время тест автоматически перейдёт в статус «открыт».
+    </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h3>Расписание</h3>
+  <p class="muted">Открыть тест автоматически в заданное время. Время — московское ({{ schedule_tz }}).</p>
+
+  {% if test.status.value == "open" %}
+    <p class="muted">Тест уже открыт. Чтобы запланировать повторное открытие — сначала закройте его.</p>
+  {% else %}
+    <form method="post" action="/teacher/test/{{ test.id }}/schedule" class="form-narrow">
+      <label for="scheduled_at">Дата и время открытия (МСК)</label>
+      <input type="datetime-local" id="scheduled_at" name="scheduled_at"
+             {% if scheduled_at_value %}value="{{ scheduled_at_value }}"{% endif %}
+             {% if not can_open %}disabled{% endif %} required>
+      <button class="btn" type="submit" {% if not can_open %}disabled{% endif %}>
+        {% if test.status.value == "scheduled" %}Перепланировать{% else %}Запланировать открытие{% endif %}
+      </button>
+    </form>
+    {% if not can_open %}
+      <p class="muted">Сначала подготовьте 10 вопросов — расписание недоступно без них.</p>
+    {% endif %}
+  {% endif %}
+
+  {% if test.status.value == "scheduled" %}
+    <form method="post" action="/teacher/test/{{ test.id }}/unschedule" style="margin-top:1rem">
+      <button class="btn btn-outline" type="submit">Отменить расписание (вернуть в черновик)</button>
+    </form>
+  {% endif %}
 </section>
 
 <section class="card">

@@ -4,8 +4,11 @@
 День 1: каркас с домашней страницей.
 Этап 3: подключены SessionMiddleware (сессия студента) и роутер студента
         (app.routers.student): регистрация, кабинет, прохождение теста, результат.
-Роуты преподавателя подключаются на этапе 5.
+Этап 5: подключён роутер преподавателя.
+Этап 7: подключён планировщик APScheduler (lifespan) — автооткрытие
+        тестов по расписанию (scheduled → open).
 """
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Request
@@ -21,8 +24,27 @@ from app.database import Base, engine, get_db
 from app.routers import student
 from app.routers import teacher
 from app.services.queries import list_available_tests
+from app.services.scheduler import shutdown_scheduler, start_scheduler
 
-app = FastAPI(title="SMM Testing", docs_url="/docs")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Жизненный цикл приложения: создание таблиц + старт/стоп планировщика.
+
+    lifespan-контекст пришёл на смену устаревшим on_event('startup'/'shutdown'):
+    одна точка, где виден и старт, и останов, — нагляднее и безопаснее.
+    """
+    # Создаём все таблицы при старте (модели определены на этапе 1).
+    Base.metadata.create_all(bind=engine)
+    # Планировщик: догоняющая проверка + регулярный перевод scheduled→open.
+    start_scheduler(app)
+    try:
+        yield
+    finally:
+        shutdown_scheduler()
+
+
+app = FastAPI(title="SMM Testing", docs_url="/docs", lifespan=lifespan)
 
 # Сессионная кука (подписанная) — хранит student_id после входа.
 app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY)
@@ -31,9 +53,6 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 app.state.templates = templates  # общий доступ из роутеров через request.app.state
 
 app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
-
-# Создаём все таблицы при старте (модели определены на этапе 1).
-Base.metadata.create_all(bind=engine)
 
 # Роуты студента и преподавателя.
 app.include_router(student.router)
