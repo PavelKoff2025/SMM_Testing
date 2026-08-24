@@ -43,6 +43,13 @@ TEACHER_PASSWORD = os.getenv("TEACHER_PASSWORD", "changeme")
 # === OpenAI (генерация тестов из PDF) ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+# Мок-режим: AI_MOCK=1 — генерация возвращает фиксированный демо-тест без
+# вызова OpenAI (удобно для разработки/демонстрации без API-ключа).
+# AI_MOCK=0 + заполненный OPENAI_API_KEY — реальный вызов GPT-4o-mini.
+AI_MOCK = os.getenv("AI_MOCK", "1") == "1"
+# Лимит символов извлекаемого из PDF текста — защита от аномально больших
+# файлов (GPT-4o-mini держит 128k токенов, но презентации короткие).
+AI_MAX_TEXT_CHARS = int(os.getenv("AI_MAX_TEXT_CHARS", "32000"))
 
 # === Отправка результатов (Яндекс SMTP) ===
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.yandex.ru")

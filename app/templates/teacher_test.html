@@ -45,7 +45,16 @@
       </form>
     {% endif %}
     {% if test.source.value == "pdf" %}
-      <span class="muted" style="margin-left:.5rem">Сгенерировать вопросы (этап 6) — скоро</span>
+      <form method="post" action="/teacher/test/{{ test.id }}/generate" style="margin:0">
+        <button class="btn" type="submit"
+                {% if test.status.value in ("open", "closed") %}disabled{% endif %}>
+          ⚡ Сгенерировать вопросы из PDF
+        </button>
+      </form>
+      <span class="muted" style="margin-left:.5rem">
+        {% if ai_mock %}мок-режим (демо-тест без вызова API){% else %}GPT-4o-mini · 10 вопросов 4/4/2{% endif %}
+        {% if test.questions %}· вопросы будут заменены{% endif %}
+      </span>
     {% endif %}
   </div>
 </section>

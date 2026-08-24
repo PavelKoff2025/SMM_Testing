@@ -24,7 +24,9 @@ from sqlalchemy.orm import Session
 import config
 from app.database import get_db
 from app.models import Attempt, Student, Test, TestSource, TestStatus
-from app.services.test_loader import load_test_from_data
+from app.services.ai_generation import AiConfigError, AiGenerationError, generate_test
+from app.services.pdf_parser import PdfParseError, extract_text
+from app.services.test_loader import attach_questions, load_test_from_data
 
 router = APIRouter()
 
@@ -237,6 +239,7 @@ async def teacher_test_preview(test_id: int, request: Request, db: Session = Dep
             "test": test,
             "can_open": can_open,
             "questions_per_test": config.QUESTIONS_PER_TEST,
+            "ai_mock": config.AI_MOCK,
             "flash": flash,
             "error": err,
         },
@@ -278,4 +281,65 @@ async def test_close(test_id: int, request: Request, db: Session = Depends(get_d
     test.status = TestStatus.closed
     db.commit()
     _flash(request, f"Тест «{test.lecture_title}» закрыт.")
+    return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+
+# === AI-генерация вопросов из PDF (Этап 6) ===
+
+@router.post("/teacher/test/{test_id}/generate")
+async def test_generate(test_id: int, request: Request, db: Session = Depends(get_db)):
+    """Сгенерировать 10 вопросов из PDF-презентации (GPT-4o-mini / мок).
+
+    Защита:
+      • только для вошедшего преподавателя;
+      • только для source=pdf;
+      • нельзя перегенерировать open/closed-тест (результаты студентов не должны
+        рассинхронизироваться с вопросами);
+      • pdf_path должен быть задан и файл должен существовать на диске.
+    Любая ошибка на любом этапе → flash-сообщение, возврат в предпросмотр.
+    """
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    test = db.get(Test, test_id)
+    if test is None:
+        raise HTTPException(404, "Тест не найден")
+
+    # Универсальный «возврат с ошибкой» в предпросмотр.
+    def back(msg: str):
+        _flash(request, msg, error=True)
+        return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+    if test.source != TestSource.pdf:
+        return back("Генерация доступна только для тестов из PDF.")
+    if test.status in (TestStatus.open, TestStatus.closed):
+        return back(
+            "Нельзя перегенерировать открытый или закрытый тест — "
+            "это сломает уже сданные студентами результаты."
+        )
+    if not test.pdf_path:
+        return back("У теста нет связанного PDF-файла.")
+
+    pdf_path = config.UPLOADS_DIR / test.pdf_path
+    if not pdf_path.exists():
+        return back(f"PDF-файл не найден на диске: {test.pdf_path}")
+
+    try:
+        text = extract_text(pdf_path)
+        data = generate_test(text, test.lecture_title)
+        inserted = attach_questions(test, data, db)
+    except PdfParseError as e:
+        return back(f"Ошибка чтения PDF: {e}")
+    except AiConfigError as e:
+        return back(str(e))
+    except AiGenerationError as e:
+        return back(f"Ошибка генерации: {e}")
+    except ValueError as e:
+        return back(f"Модель вернула невалидный тест: {e}")
+    except Exception as e:
+        return back(f"Непредвиденная ошибка генерации: {e}")
+
+    mode = "мок" if config.AI_MOCK else "GPT-4o-mini"
+    _flash(request, f"Сгенерировано {inserted} вопросов из PDF ({mode}).")
     return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
