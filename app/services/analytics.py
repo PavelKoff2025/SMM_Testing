@@ -28,7 +28,8 @@ from app.models import Answer, Attempt, Student, Test
 AttemptRow = namedtuple(
     "AttemptRow",
     ["id", "student_name", "group", "lecture_title", "test_id",
-     "score", "pass_threshold", "passed", "finished_at", "wrong_count"],
+     "attempt_number", "status", "score", "pass_threshold", "passed",
+     "finished_at", "wrong_count"],
 )
 
 
@@ -36,7 +37,9 @@ def attempts_summary(db: Session) -> list[AttemptRow]:
     """Все попытки одной плоской таблицей, свежие сверху.
 
     Число неверных ответов считаем подзапросом по Answer — дешевле, чем
-    тянуть все ответы в память и фильтровать в Python.
+    тянуть все ответы в память и фильтровать в Python. Передаём attempt_number
+    и status — преподаватель видит, какая по счёту попытка и завершилась ли
+    она по таймауту (День 3).
     """
     wrong_subq = (
         db.query(
@@ -56,6 +59,8 @@ def attempts_summary(db: Session) -> list[AttemptRow]:
             Student.group,
             Test.lecture_title,
             Test.id,
+            Attempt.attempt_number,
+            Attempt.status,
             Attempt.score,
             Test.pass_threshold,
             Attempt.passed,
@@ -72,15 +77,17 @@ def attempts_summary(db: Session) -> list[AttemptRow]:
     return [
         AttemptRow(
             id=r[0],
-            student_name=f"{r[3]} {r[1]}",  # Фамилия Имя — привычный порядок
-            group=r[2],
+            student_name=f"{r[2]} {r[1]}",  # Фамилия Имя — привычный порядок
+            group=r[3],
             lecture_title=r[4],
             test_id=r[5],
-            score=r[6],
-            pass_threshold=r[7],
-            passed=r[8],
-            finished_at=r[9],
-            wrong_count=r[10],
+            attempt_number=r[6],
+            status=r[7].value if r[7] is not None else "",
+            score=r[8],
+            pass_threshold=r[9],
+            passed=r[10],
+            finished_at=r[11],
+            wrong_count=r[12],
         )
         for r in rows
     ]

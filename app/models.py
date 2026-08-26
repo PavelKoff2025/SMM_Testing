@@ -2,8 +2,12 @@
 SQLAlchemy-модели SMM_testing.
 
 Этап 1: схема данных под спецификацию README.
-Ключевые решения (согласовано с автором):
-  • Одна попытка на тест — UniqueConstraint(student_id, test_id) на Attempt.
+Поточный режим с таймером и перепрохождением (День 1):
+  • Несколько попыток на тест — UniqueConstraint(student_id, test_id) УБРАН.
+  • Attempt живёт от старта (in_progress) до завершения (completed) или
+    истечения таймера (timed_out). deadline = started_at + time_limit_seconds.
+  • Кулдаун cooldown_until = deadline + cooldown_seconds ставится ТОЛЬКО при
+    таймауте. В зачёт/допуск идёт ЛУЧШАЯ попытка по каждому тесту.
   • Правильный ответ и ответ студента хранятся как индекс варианта (0-based).
   • Варианты ответов — JSON-колонка (список строк), SQLite хранит как TEXT.
 """
@@ -18,11 +22,11 @@ from sqlalchemy import (
     ForeignKey,
     JSON,
     Enum as SAEnum,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import relationship
 
+import config
 from app.database import Base
 
 
@@ -47,6 +51,21 @@ class Difficulty(enum.Enum):
     easy = "easy"
     medium = "medium"
     logic = "logic"
+
+
+class AttemptStatus(enum.Enum):
+    """Жизненный цикл попытки.
+
+    in_progress — студент начал, идёт таймер; answers наполняются по мере
+                  прохождения вопросов (forward-only).
+    completed   — студент ответил на все вопросы и завершил сам (или JS-таймер
+                  доработал, но в пределах лимита).
+    timed_out   — истёк time_limit_seconds; попытка закрыта принудительно,
+                  выставлен cooldown_until = deadline + cooldown_seconds.
+    """
+    in_progress = "in_progress"
+    completed = "completed"
+    timed_out = "timed_out"
 
 
 # === Модели ===
@@ -79,6 +98,10 @@ class Test(Base):
     source = Column(SAEnum(TestSource), nullable=False, default=TestSource.json)
     pdf_path = Column(String(255), nullable=True)  # путь к загруженной PDF (если source=pdf)
     pass_threshold = Column(Integer, nullable=False, default=7)  # зачёт при >= N из 10
+    # Лимит времени на весь тест и кулдаун после таймаута (по образцу pass_threshold:
+    # per-test колонка с дефолтом из config — можно менять для отдельного теста).
+    time_limit_seconds = Column(Integer, nullable=False, default=config.TEST_TIME_LIMIT_SECONDS)
+    cooldown_seconds = Column(Integer, nullable=False, default=config.TEST_COOLDOWN_SECONDS)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
 
     questions = relationship("Question", back_populates="test", cascade="all, delete-orphan",
@@ -110,20 +133,28 @@ class Question(Base):
 class Attempt(Base):
     """Попытка прохождения теста студентом.
 
-    Одна попытка на тест — UniqueConstraint(student_id, test_id).
+    Несколько попыток разрешены (UniqueConstraint убран). attempt_number —
+    порядковый номер у студента по этому тесту. status живёт от in_progress
+    (старт) до completed (сам завершил) или timed_out (истёк таймер).
+    deadline = started_at + time_limit_seconds — момент, после которого
+    попытка принудительно закрывается; хранится явно, чтобы серверная проверка
+    «now > deadline» была детерминированной без пересчёта. cooldown_until
+    выставляется ТОЛЬКО при timed_out; пока now < cooldown_until, новую попытку
+    начать нельзя.
     """
     __tablename__ = "attempts"
-    __table_args__ = (
-        UniqueConstraint("student_id", "test_id", name="uq_student_test"),
-    )
 
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer, ForeignKey("students.id", ondelete="CASCADE"), nullable=False)
     test_id = Column(Integer, ForeignKey("tests.id", ondelete="CASCADE"), nullable=False)
+    attempt_number = Column(Integer, nullable=False, default=1)  # 1, 2, 3… у студента по тесту
+    status = Column(SAEnum(AttemptStatus), nullable=False, default=AttemptStatus.in_progress)
     score = Column(Integer, nullable=False, default=0)  # число правильных из 10
     passed = Column(Boolean, nullable=False, default=False)  # score >= pass_threshold
     started_at = Column(DateTime, nullable=False, server_default=func.now())
-    finished_at = Column(DateTime, nullable=True)
+    deadline = Column(DateTime, nullable=True)   # started_at + time_limit_seconds (наивный UTC)
+    finished_at = Column(DateTime, nullable=True)  # completed/timed_out: момент закрытия
+    cooldown_until = Column(DateTime, nullable=True)  # только при timed_out: deadline + cooldown
 
     student = relationship("Student", back_populates="attempts")
     test = relationship("Test", back_populates="attempts")
@@ -131,7 +162,8 @@ class Attempt(Base):
                            order_by="Answer.question_number")
 
     def __repr__(self):
-        return f"<Attempt student={self.student_id} test={self.test_id} score={self.score} passed={self.passed}>"
+        return (f"<Attempt #{self.attempt_number} student={self.student_id} test={self.test_id} "
+                f"status={self.status.value if self.status else '?'} score={self.score}>")
 
 
 class Answer(Base):

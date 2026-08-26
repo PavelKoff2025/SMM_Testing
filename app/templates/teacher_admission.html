@@ -12,6 +12,7 @@
   <p class="muted">
     Критерий допуска: пройдено все {{ tests_required }} тестов <strong>и</strong>
     минимум {{ correct_required }} правильных ответов из {{ total_questions }}.
+    В зачёт идёт <strong>лучшая попытка</strong> по каждому тесту (перепрохождение разрешено, кулдаун 24ч при таймауте).
   </p>
 </section>
 
@@ -35,7 +36,7 @@
     <thead>
       <tr>
         <th>Студент</th><th>Группа</th>
-        <th>Пройдено</th><th>Зачтено</th><th>Правильных</th><th>Допуск</th>
+        <th>Пройдено</th><th>Зачтено</th><th>Правильных</th><th>Попыток</th><th>Допуск</th>
       </tr>
     </thead>
     <tbody>
@@ -46,6 +47,7 @@
         <td>{{ r.taken }} / {{ tests_required }}</td>
         <td>{{ r.passed }}</td>
         <td>{{ r.total_correct }} / {{ total_questions }}</td>
+        <td>{{ r.attempts_count }}</td>
         <td>
           {% if r.admitted %}<span class="badge badge-pass">допущен</span>
           {% else %}<span class="badge badge-fail">не допущен</span>{% endif %}

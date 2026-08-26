@@ -42,6 +42,11 @@ async def lifespan(app: FastAPI):
     config.ensure_prod_secrets()
     # Создаём все таблицы при старте (модели определены на этапе 1).
     Base.metadata.create_all(bind=engine)
+    # Миграции схемы (без Alembic): новые колонки tests/attempts, снятие
+    # UNIQUE(student_id, test_id) с attempts. create_all не меняет существующие
+    # таблицы — поэтому правки схемы делаются идемпотентным скриптом migrate.
+    from app.migrate import run_migrations
+    run_migrations()
     # Планировщик: догоняющая проверка + регулярный перевод scheduled→open.
     start_scheduler(app)
     try:

@@ -1,12 +1,18 @@
 """
-Расписание доступа к тестам (Этап 7): APScheduler переводит тесты
-из статуса `scheduled` в `open`, когда наступает заданное время.
+Расписание доступа к тестам (Этап 7) + дворник зависших попыток (День 3).
+
+Две задачи на одном интервале (SCHEDULER_INTERVAL_SECONDS, по умолчанию 30 сек):
+  1. open_due_scheduled_tests — переводит тесты из `scheduled` в `open`,
+     когда наступает заданное время.
+  2. finalize_stale_attempts — закрывает попытки в `in_progress`, у которых
+     истёк deadline (студент закрыл вкладку и не вернулся), как `timed_out`
+     с выставлением кулдауна 24ч. Подстраховка к ленивой проверке в роутах.
 
 Архитектурные решения (согласовано с автором):
-  • Источник правды — наша БД (tests.scheduled_at), а не внутреннее
-    хранилище APScheduler. Поэтому используем MemoryJobStore (дефолт):
-    перезапуск приложения ничего не теряет — при старте запускаем
-    «догоняющую» проверку и открываем всё, чьё время уже пришло.
+  • Источник правды — наша БД, а не внутреннее хранилище APScheduler.
+    Поэтому MemoryJobStore (дефолт): перезапуск приложения ничего не теряет —
+    при старте запускаем «догоняющую» проверку (открыть тесты + закрыть
+    зависшие попытки, чьё время уже пришло).
   • Время хранится и сравнивается в UTC (наивный UTC, консистентно с
     datetime.utcnow() в queries.py / student.py). Преподаватель вводит
     время по Москве — конвертация Europe/Moscow ↔ UTC через zoneinfo.
@@ -25,7 +31,8 @@ from sqlalchemy.orm import Session
 
 import config
 from app.database import SessionLocal
-from app.models import Test, TestStatus
+from app.models import Attempt, AttemptStatus, Test, TestStatus
+from app.services.queries import finalize_timed_out
 
 logger = logging.getLogger("smm.scheduler")
 
@@ -100,11 +107,51 @@ def open_due_scheduled_tests(db: Session) -> int:
     return opened
 
 
+# === Дворник зависших попыток (День 3) ===
+
+def finalize_stale_attempts(db: Session) -> int:
+    """Закрыть попытки в статусе in_progress, у которых истёк deadline.
+
+    Подстраховка к ленивой проверке в роутах студента: если студент закрыл
+    вкладку и не вернулся, attempt висит в in_progress вечно и блокирует
+    старт новой (хотя кулдауна ещё нет — он ставится только при timed_out).
+    Дворник закрывает такие попытки как timed_out → выставляется кулдаун 24ч,
+    и студент сможет перепройти после него.
+
+    Возвращает число закрытых попыток. Используется как регулярная задача
+    планировщика и как «догоняющая» проверка при старте приложения.
+    """
+    now = datetime.utcnow()
+    stale = (
+        db.query(Attempt)
+        .filter(
+            Attempt.status == AttemptStatus.in_progress,
+            Attempt.deadline.isnot(None),
+            Attempt.deadline < now,
+        )
+        .all()
+    )
+    closed = 0
+    for attempt in stale:
+        finalize_timed_out(attempt)
+        closed += 1
+        logger.info(
+            "Дворник: попытка #%d (студент %d, тест %d) закрыта по таймауту — "
+            "deadline %s истёк, студент не вернулся.",
+            attempt.id, attempt.student_id, attempt.test_id,
+            attempt.deadline.isoformat() if attempt.deadline else "?",
+        )
+    if closed:
+        db.commit()
+    return closed
+
+
 async def _tick():
-    """Регулярная задача планировщика: открыть тесты, чьё время пришло."""
+    """Регулярная задача планировщика: открыть тесты + закрыть зависшие попытки."""
     db = SessionLocal()
     try:
         open_due_scheduled_tests(db)
+        finalize_stale_attempts(db)
     except Exception:
         logger.exception("Ошибка в тике планировщика")
         db.rollback()
@@ -126,6 +173,10 @@ def start_scheduler(app) -> None:
         opened = open_due_scheduled_tests(db)
         if opened:
             logger.info("Стартовая проверка: открыто %d тестов по расписанию.", opened)
+        # Дворник: закрываем зависшие in_progress (студент закрыл вкладку и не вернулся).
+        closed = finalize_stale_attempts(db)
+        if closed:
+            logger.info("Стартовая проверка: закрыто %d зависших попыток по таймауту.", closed)
     finally:
         db.close()
 
@@ -156,6 +207,7 @@ __all__ = [
     "local_to_utc",
     "utc_to_local",
     "open_due_scheduled_tests",
+    "finalize_stale_attempts",
     "start_scheduler",
     "shutdown_scheduler",
 ]

@@ -29,6 +29,17 @@ PASS_THRESHOLD = 7  # зачёт при >= 7 правильных из 10
 # Структура вопросов по сложности (всего = 10)
 QUESTION_STRUCTURE = {"easy": 4, "medium": 4, "logic": 2}
 
+# === Таймер и перепрохождение ===
+# На весь тест даётся TEST_TIME_LIMIT_SECONDS секунд (по ТЗ — 3 минуты).
+# Таймер идёт от старта попытки (Attempt.started_at); за TIMER_DANGER_SECONDS
+# до истечения становится красным. При превышении — попытка закрывается как
+# timed_out, и следующая открывается ровно через TEST_COOLDOWN_SECONDS (24 ч).
+# Кулдаун действует ТОЛЬКО при таймауте (не при незачёте — решение автора).
+# В зачёт/допуск идёт ЛУЧШАЯ попытка по каждому тесту.
+TEST_TIME_LIMIT_SECONDS = int(os.getenv("TEST_TIME_LIMIT_SECONDS", "180"))
+TEST_COOLDOWN_SECONDS = int(os.getenv("TEST_COOLDOWN_SECONDS", str(24 * 3600)))
+TIMER_DANGER_SECONDS = int(os.getenv("TIMER_DANGER_SECONDS", "30"))
+
 # === Допуск к финальному зачёту ===
 ADMISSION_TESTS_REQUIRED = 9        # студент должен пройти все 9 тестов
 ADMISSION_CORRECT_REQUIRED = 81     # и набрать минимум 81 правильный ответ

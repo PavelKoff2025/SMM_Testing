@@ -1,15 +1,30 @@
 """
-Роуты студента (Этап 3): регистрация/вход, кабинет, прохождение теста, результат.
+Роуты студента: регистрация/вход, кабинет, поточное прохождение теста, результат.
 
 Аутентификация — без пароля (по README): студент вводит имя, фамилию, группу и
-корпоративную почту @misis.ru. Если почта новая — создаём студента, если уже есть —
-это вход. Идентификатор студента хранится в подписанной сессионной куке
+корпоративную почту @misis.ru. Если почта новая — создаём студента, если уже
+есть — это вход. Идентификатор студента хранится в подписанной сессионной куке
 (SessionMiddleware, подключается в main.py).
 
-Ограничения, заложенные в моделях (Этап 1):
-  • одна попытка на тест — UniqueConstraint(student_id, test_id) на Attempt;
-  • поэтому перед прохождением проверяем существующую попытку и при наличии —
-    редирект на результат (перепройтение невозможно).
+Поточный режим с таймером (День 1):
+  • Несколько попыток на тест (UniqueConstraint убран). Attempt живёт от старта
+    (in_progress) до completed (сам завершил) или timed_out (истёк таймер).
+  • Кулдаун 24ч — ТОЛЬКО при таймауте. В зачёт/допуск идёт ЛУЧШАЯ попытка.
+  • Вопросы открываются по одному, навигация только вперёд (forward-only):
+    следующий вопрос = last_answered_number + 1; попытка прыгнуть вперёд/
+    назад bounce'ит на актуальный вопрос.
+  • Серверная защита от таймаута ленивая: при любом запросе к идущей попытке
+    проверяем now > deadline → принудительно timed_out. Это покрывает закрытие
+    вкладки (JS-таймер не отправил timeout). Доп. подстраховка-«дворник» —
+    APScheduler (День 3).
+
+Эндпоинты потока:
+  GET  /student/test/{test_id}                     — оркестратор: продолжить /
+                                                     стартовать / показать кулдаун
+  GET  /student/test/{attempt_id}/q/{n}             — вопрос N + прогресс + таймер
+  POST /student/test/{attempt_id}/q/{n}             — сохранить ответ, перейти далее
+  POST /student/test/{attempt_id}/timeout           — явный таймаут от JS-таймера
+  GET  /student/result/{attempt_id}                 — результат + разбор + напоминание
 """
 import asyncio
 import logging
@@ -26,7 +41,20 @@ from app.database import get_db
 from app.models import Answer, Attempt, Student, Test
 from app.schemas import StudentRegister
 from app.services.emailer import send_result_email
-from app.services.queries import is_test_available, list_available_tests
+from app.services.queries import (
+    get_best_attempt,
+    get_cooldown,
+    get_in_progress,
+    is_deadline_passed,
+    is_test_available,
+    last_answered_number,
+    list_available_tests,
+    finalize_completed,
+    finalize_timed_out,
+    save_answer,
+    start_attempt,
+)
+from app.services.scheduler import utc_to_local
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -56,6 +84,13 @@ def _current_student(request: Request, db: Session) -> Student | None:
     if not sid:
         return None
     return db.get(Student, sid)
+
+
+def _format_msk(dt: datetime | None) -> str:
+    """Наивный UTC → строка по Москве для напоминаний о кулдауне/дате."""
+    if dt is None:
+        return ""
+    return utc_to_local(dt).strftime("%d.%m.%Y %H:%M (МСК)")
 
 
 async def _maybe_send_result_email(student: Student, attempt: Attempt, test: Test) -> None:
@@ -101,12 +136,35 @@ async def _maybe_send_result_email(student: Student, attempt: Attempt, test: Tes
         logger.exception("Не удалось отправить письмо с результатом на %s.", student.email)
 
 
+def _questions_by_number(test: Test) -> dict[int, object]:
+    """{question.number: question} — для быстрого доступа по номеру."""
+    return {q.number: q for q in test.questions}
+
+
+def _validate_chosen(raw) -> int:
+    """Жёсткая валидация индекса варианта: нечисловой/вне диапазона → -1.
+
+    -1 считается неверным; в БД не мусор, а честная «не отвечено/ошибка».
+    """
+    try:
+        chosen = int(raw) if raw is not None else -1
+    except (ValueError, TypeError):
+        return -1
+    return chosen
+
+
 @router.get("/student", response_class=HTMLResponse)
 async def cabinet(request: Request, db: Session = Depends(get_db)):
-    """Кабинет студента: залогинен — тесты + результаты; нет — форма регистрации."""
+    """Кабинет студента: залогинен — тесты + состояние попыток; нет — форма регистрации.
+
+    Для каждого доступного теста готовим state: best_attempt, in_progress,
+    cooldown_until (+ cooldown_until_msk — формат по Москве) — чтобы шаблон
+    рисует «Начать»/«Продолжить (в. N)»/«Доступно с {дата}» и лучший результат.
+    """
     student = _current_student(request, db)
     tests = list_available_tests(db) if student else []
     attempts = []
+    test_states = []
     if student:
         attempts = (
             db.query(Attempt)
@@ -114,6 +172,19 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
             .order_by(Attempt.finished_at.desc().nullslast())
             .all()
         )
+        for t in tests:
+            cooldown = get_cooldown(db, student.id, t.id)
+            test_states.append(
+                {
+                    "test": t,
+                    "best": get_best_attempt(db, student.id, t.id),
+                    "in_progress": get_in_progress(db, student.id, t.id),
+                    "cooldown_until": cooldown,
+                    # Форматируем на сервере — шаблон не имеет доступа к utc_to_local,
+                    # а единое место правды совпадает с next_available на странице результата.
+                    "cooldown_until_msk": _format_msk(cooldown) if cooldown else None,
+                }
+            )
     flash_msg, flash_err = _take_flash(request)
     return _templates(request).TemplateResponse(
         request,
@@ -123,6 +194,7 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
             "student": student,
             "tests": tests,
             "attempts": attempts,
+            "test_states": test_states,
             "questions_per_test": config.QUESTIONS_PER_TEST,
             "pass_threshold": config.PASS_THRESHOLD,
             "error": None,
@@ -157,6 +229,7 @@ async def register(
                 "student": None,
                 "tests": [],
                 "attempts": [],
+                "test_states": [],
                 "questions_per_test": config.QUESTIONS_PER_TEST,
                 "pass_threshold": config.PASS_THRESHOLD,
                 "error": msg,
@@ -202,9 +275,15 @@ async def logout(request: Request):
     return RedirectResponse("/student", status_code=303)
 
 
-@router.get("/student/test/{test_id}", response_class=HTMLResponse)
+@router.get("/student/test/{test_id}")
 async def take_test(test_id: int, request: Request, db: Session = Depends(get_db)):
-    """Страница прохождения теста: 10 вопросов с радио-вариантами."""
+    """Оркестратор начала/продолжения теста.
+
+      1. Есть in_progress попытка — продолжить с последнего отвеченного вопроса
+         (с ленивой проверкой таймаута).
+      2. Иначе есть активный кулдаун — назад в кабинет с напоминанием о дате.
+      3. Иначе — создать новую попытку и перейти к вопросу 1.
+    """
     student = _current_student(request, db)
     if student is None:
         _set_flash(request, "Чтобы пройти тест — войдите как студент (имя, фамилия, группа, почта @misis.ru).")
@@ -214,112 +293,181 @@ async def take_test(test_id: int, request: Request, db: Session = Depends(get_db
     if test is None or not is_test_available(test):
         raise HTTPException(404, "Тест не найден или недоступен")
 
-    # Одна попытка на тест: если уже проходил — показываем результат.
-    existing = (
-        db.query(Attempt)
-        .filter(Attempt.student_id == student.id, Attempt.test_id == test_id)
-        .one_or_none()
-    )
-    if existing is not None:
-        return RedirectResponse(f"/student/result/{existing.id}", status_code=303)
+    # 1. Продолжить идущую попытку.
+    active = get_in_progress(db, student.id, test_id)
+    if active is not None:
+        if is_deadline_passed(active):
+            # Время истекло, пока студент был вне приложения — закрываем.
+            finalize_timed_out(active)
+            db.commit()
+            await _maybe_send_result_email(student, active, test)
+            return RedirectResponse(f"/student/result/{active.id}", status_code=303)
+        nxt = last_answered_number(active) + 1
+        # Если все отвечены, но попытка чудом in_progress — финализируем.
+        if nxt > config.QUESTIONS_PER_TEST:
+            finalize_completed(active)
+            db.commit()
+            await _maybe_send_result_email(student, active, test)
+            return RedirectResponse(f"/student/result/{active.id}", status_code=303)
+        return RedirectResponse(f"/student/test/{active.id}/q/{nxt}", status_code=303)
+
+    # 2. Кулдаун после таймаута.
+    cooldown = get_cooldown(db, student.id, test_id)
+    if cooldown is not None:
+        _set_flash(
+            request,
+            f"Время на попытку истекло. Следующая попытка по тесту «{test.lecture_title}» "
+            f"будет доступна {_format_msk(cooldown)}.",
+        )
+        return RedirectResponse("/student", status_code=303)
+
+    # 3. Новая попытка.
+    attempt = start_attempt(db, student, test)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        _set_flash(request, "Не удалось начать попытку — попробуйте ещё раз.")
+        return RedirectResponse("/student", status_code=303)
+    return RedirectResponse(f"/student/test/{attempt.id}/q/1", status_code=303)
+
+
+@router.get("/student/test/{attempt_id}/q/{n}", response_class=HTMLResponse)
+async def question_view(attempt_id: int, n: int, request: Request, db: Session = Depends(get_db)):
+    """Показать вопрос N с прогрессом и таймером. Forward-only + ленивый таймаут."""
+    student = _current_student(request, db)
+    if student is None:
+        _set_flash(request, "Сессия истекла — войдите снова, чтобы продолжить тест.")
+        return RedirectResponse("/student", status_code=303)
+
+    attempt = db.get(Attempt, attempt_id)
+    if attempt is None or attempt.student_id != student.id:
+        raise HTTPException(404, "Попытка не найдена")
+
+    # Завершённая попытка — на результат.
+    if attempt.status.value != "in_progress":
+        return RedirectResponse(f"/student/result/{attempt_id}", status_code=303)
+
+    # Ленивая проверка таймаута: время вышло — закрываем как timed_out.
+    if is_deadline_passed(attempt):
+        finalize_timed_out(attempt)
+        db.commit()
+        await _maybe_send_result_email(student, attempt, attempt.test)
+        return RedirectResponse(f"/student/result/{attempt_id}", status_code=303)
+
+    # Forward-only: можно смотреть только следующий за последним отвеченным.
+    expected = last_answered_number(attempt) + 1
+    if expected > config.QUESTIONS_PER_TEST:
+        # Все отвечены, но попытка ещё открыта — финализируем (защита от рассинхрона).
+        finalize_completed(attempt)
+        db.commit()
+        await _maybe_send_result_email(student, attempt, attempt.test)
+        return RedirectResponse(f"/student/result/{attempt_id}", status_code=303)
+    if n != expected:
+        # Прыжок вперёд/назад — возвращаем на актуальный вопрос.
+        return RedirectResponse(f"/student/test/{attempt_id}/q/{expected}", status_code=303)
+
+    questions = _questions_by_number(attempt.test)
+    question = questions.get(n)
+    if question is None:
+        raise HTTPException(404, "Вопрос не найден")
+
+    # Оставшееся время в секундах — основа для клиентского таймера (День 2).
+    remaining = max(0, int((attempt.deadline - datetime.utcnow()).total_seconds()))
+    total = attempt.test.time_limit_seconds
+    progress_answered = last_answered_number(attempt)
 
     return _templates(request).TemplateResponse(
         request,
         "take.html",
-        {"title": test.lecture_title, "test": test, "student": student},
+        {
+            "title": attempt.test.lecture_title,
+            "test": attempt.test,
+            "attempt": attempt,
+            "student": student,
+            "question": question,
+            "q_number": n,
+            "q_total": config.QUESTIONS_PER_TEST,
+            "remaining_seconds": remaining,
+            "time_limit_seconds": total,
+            "danger_seconds": config.TIMER_DANGER_SECONDS,
+            "progress_answered": progress_answered,
+        },
     )
 
 
-@router.post("/student/test/{test_id}/submit")
-async def submit_test(test_id: int, request: Request, db: Session = Depends(get_db)):
-    """Приём ответов: считаем правильные, сохраняем Attempt + 10 Answer, редирект на результат."""
+@router.post("/student/test/{attempt_id}/q/{n}")
+async def answer_question(attempt_id: int, n: int, request: Request, db: Session = Depends(get_db)):
+    """Сохранить ответ на вопрос N и перейти к следующему (или завершить)."""
     student = _current_student(request, db)
     if student is None:
-        _set_flash(request, "Сессия истекла — войдите снова, чтобы сдать тест.")
+        _set_flash(request, "Сессия истекла — войдите снова.")
         return RedirectResponse("/student", status_code=303)
 
-    test = db.get(Test, test_id)
-    if test is None or not is_test_available(test):
-        raise HTTPException(404, "Тест не найден или недоступен")
+    attempt = db.get(Attempt, attempt_id)
+    if attempt is None or attempt.student_id != student.id:
+        raise HTTPException(404, "Попытка не найдена")
 
-    # Защита от повторной отправки (двойной клик / возврат в браузере).
-    existing = (
-        db.query(Attempt)
-        .filter(Attempt.student_id == student.id, Attempt.test_id == test_id)
-        .one_or_none()
-    )
-    if existing is not None:
-        return RedirectResponse(f"/student/result/{existing.id}", status_code=303)
+    if attempt.status.value != "in_progress":
+        return RedirectResponse(f"/student/result/{attempt_id}", status_code=303)
+
+    # Ленивый таймаут и на POST: время вышло — не принимаем ответ, закрываем.
+    if is_deadline_passed(attempt):
+        finalize_timed_out(attempt)
+        db.commit()
+        await _maybe_send_result_email(student, attempt, attempt.test)
+        return RedirectResponse(f"/student/result/{attempt_id}", status_code=303)
+
+    # Forward-only: принимаем ответ только на актуальный вопрос.
+    expected = last_answered_number(attempt) + 1
+    if n != expected:
+        return RedirectResponse(f"/student/test/{attempt_id}/q/{expected}", status_code=303)
+
+    questions = _questions_by_number(attempt.test)
+    question = questions.get(n)
+    if question is None:
+        raise HTTPException(404, "Вопрос не найден")
 
     form = await request.form()
+    chosen = _validate_chosen(form.get("answer"))
+    if not (0 <= chosen < len(question.options)):
+        chosen = -1
 
-    attempt = Attempt(student_id=student.id, test_id=test.id, score=0, passed=False)
-    db.add(attempt)
-    try:
-        db.flush()  # нужен attempt.id до вставки ответов; на race — IntegrityError
-    except IntegrityError:
-        # Двойной сабмит (две вкладки/двойной клик): UNIQUE(student_id, test_id).
-        db.rollback()
-        existing = (
-            db.query(Attempt)
-            .filter(Attempt.student_id == student.id, Attempt.test_id == test_id)
-            .one_or_none()
-        )
-        if existing is not None:
-            return RedirectResponse(f"/student/result/{existing.id}", status_code=303)
-        return RedirectResponse("/student", status_code=303)
+    save_answer(db, attempt, question, chosen)
 
-    # Считаем правильные и формируем ответы с жёсткой валидацией: нечисловой или
-    # выходящий за пределы options ответ → -1 (считается неверным, в БД не мусор).
-    score = 0
-    for q in test.questions:
-        raw = form.get(f"q{q.number}")
-        try:
-            chosen = int(raw) if raw is not None else -1
-        except (ValueError, TypeError):
-            chosen = -1
-        if not (0 <= chosen < len(q.options)):
-            chosen = -1
-        is_correct = chosen == q.correct_answer
-        if is_correct:
-            score += 1
-        db.add(
-            Answer(
-                attempt_id=attempt.id,
-                question_number=q.number,
-                difficulty=q.difficulty,
-                student_answer=chosen,
-                is_correct=is_correct,
-            )
-        )
-
-    attempt.score = score
-    attempt.passed = score >= test.pass_threshold
-    attempt.finished_at = datetime.utcnow()
-    try:
+    if n < config.QUESTIONS_PER_TEST:
         db.commit()
-    except IntegrityError:
-        # Подстраховка: UNIQUE мог сработать только на commit.
-        db.rollback()
-        existing = (
-            db.query(Attempt)
-            .filter(Attempt.student_id == student.id, Attempt.test_id == test_id)
-            .one_or_none()
-        )
-        if existing is not None:
-            return RedirectResponse(f"/student/result/{existing.id}", status_code=303)
+        return RedirectResponse(f"/student/test/{attempt_id}/q/{n + 1}", status_code=303)
+
+    # Последний вопрос — завершаем попытку.
+    finalize_completed(attempt)
+    db.commit()
+    await _maybe_send_result_email(student, attempt, attempt.test)
+    return RedirectResponse(f"/student/result/{attempt_id}", status_code=303)
+
+
+@router.post("/student/test/{attempt_id}/timeout")
+async def timeout_attempt(attempt_id: int, request: Request, db: Session = Depends(get_db)):
+    """Явный таймаут от JS-таймера (День 2). Идемпотентен: повторный POST — на результат."""
+    student = _current_student(request, db)
+    if student is None:
         return RedirectResponse("/student", status_code=303)
 
-    # Email-отправка результата студенту (если SMTP_ENABLED=1). Не блокирует
-    # показ результата: ошибка SMTP логируется, студент видит результат в кабинете.
-    _maybe_send_result_email(student, attempt, test)
+    attempt = db.get(Attempt, attempt_id)
+    if attempt is None or attempt.student_id != student.id:
+        raise HTTPException(404, "Попытка не найдена")
 
-    return RedirectResponse(f"/student/result/{attempt.id}", status_code=303)
+    if attempt.status.value == "in_progress":
+        finalize_timed_out(attempt)
+        db.commit()
+        await _maybe_send_result_email(student, attempt, attempt.test)
+
+    return RedirectResponse(f"/student/result/{attempt_id}", status_code=303)
 
 
 @router.get("/student/result/{attempt_id}", response_class=HTMLResponse)
 async def result(attempt_id: int, request: Request, db: Session = Depends(get_db)):
-    """Страница результата: оценка + построчный разбор ответов."""
+    """Страница результата: оценка + построчный разбор + напоминание о кулдауне."""
     student = _current_student(request, db)
     if student is None:
         _set_flash(request, "Войдите, чтобы увидеть результат теста.")
@@ -350,6 +498,11 @@ async def result(attempt_id: int, request: Request, db: Session = Depends(get_db
             }
         )
 
+    # Напоминание о следующей попытке — только при действующем кулдауне.
+    next_available = None
+    if attempt.cooldown_until and attempt.cooldown_until > datetime.utcnow():
+        next_available = _format_msk(attempt.cooldown_until)
+
     return _templates(request).TemplateResponse(
         request,
         "result.html",
@@ -360,5 +513,6 @@ async def result(attempt_id: int, request: Request, db: Session = Depends(get_db
             "student": student,
             "rows": rows,
             "questions_per_test": config.QUESTIONS_PER_TEST,
+            "next_available": next_available,
         },
     )

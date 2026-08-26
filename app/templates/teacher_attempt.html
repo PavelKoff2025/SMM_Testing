@@ -10,6 +10,12 @@
   </div>
   <p class="muted">
     <strong>{{ student.last_name }} {{ student.first_name }}</strong>, группа {{ student.group }}.
+    Попытка №{{ attempt.attempt_number }}
+    {% if attempt.status.value == 'timed_out' %}<span class="badge badge-closed">таймаут</span>
+    {% elif attempt.status.value == 'completed' %}<span class="badge badge-open">завершена</span>
+    {% elif attempt.status.value == 'in_progress' %}<span class="badge badge-scheduled">идёт</span>{% endif %}
+  </p>
+  <p class="muted">
     Правильных ответов: <strong>{{ attempt.score }}</strong> из {{ questions_per_test }}.
     Порог зачёта: {{ test.pass_threshold }}.
   </p>

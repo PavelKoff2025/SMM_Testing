@@ -636,12 +636,12 @@ async def teacher_admission_csv(request: Request, db: Session = Depends(get_db))
     writer = csv.writer(buffer, delimiter=";", lineterminator="\r\n")
     writer.writerow(
         ["Фамилия", "Имя", "Группа", "Email", "Пройдено тестов",
-         "Зачтено", "Правильных ответов", "Допуск"]
+         "Зачтено", "Правильных ответов", "Попыток", "Допуск"]
     )
     for r in report:
         writer.writerow([
             r.last_name, r.first_name, r.group, r.email,
-            r.taken, r.passed, r.total_correct,
+            r.taken, r.passed, r.total_correct, r.attempts_count,
             "допущен" if r.admitted else "не допущен",
         ])
 

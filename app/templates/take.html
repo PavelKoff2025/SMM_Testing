@@ -8,30 +8,71 @@
   <h2>{{ test.lecture_title }}</h2>
   <p class="muted">
     {{ student.last_name }} {{ student.first_name }}, группа {{ student.group }}.
-    10 вопросов, на каждый — один ответ. Зачёт при ≥ {{ test.pass_threshold }} правильных.
-    У вас только одна попытка, проверьте ответы перед отправкой.
+    Вопрос {{ q_number }} из {{ q_total }}. Зачёт при ≥ {{ test.pass_threshold }} правильных.
   </p>
+
+  {# Прогресс-бар: заполнен на progress_answered из q_total #}
+  <div class="progress">
+    <div class="progress-bar" id="progress-bar"
+         style="width: {{ (progress_answered / q_total * 100) | round }}%"></div>
+  </div>
+
+  {# Таймер: обратный отсчёт от remaining_seconds, краснеет за danger_seconds до конца #}
+  <div class="timer" id="timer" data-remaining="{{ remaining_seconds }}"
+       data-danger="{{ danger_seconds }}">--:--</div>
 </section>
 
-<form method="post" action="/student/test/{{ test.id }}/submit">
-  {% for q in test.questions %}
+<form method="post" action="/student/test/{{ attempt.id }}/q/{{ q_number }}" data-disable-on-submit>
   <section class="card test-question">
     <div class="q-head">
-      <span class="q-num">{{ q.number }}</span>
-      <span class="q-text">{{ q.text }}</span>
-      <span class="badge badge-{{ q.difficulty.value }}">{{ diff_labels[q.difficulty.value] }}</span>
+      <span class="q-num">{{ q_number }}</span>
+      <span class="q-text">{{ question.text }}</span>
+      <span class="badge badge-{{ question.difficulty.value }}">{{ diff_labels[question.difficulty.value] }}</span>
     </div>
     <div class="options">
-      {% for opt in q.options %}
+      {% for opt in question.options %}
       <label class="option">
-        <input type="radio" name="q{{ q.number }}" value="{{ loop.index0 }}" required>
+        <input type="radio" name="answer" value="{{ loop.index0 }}" required>
         <span>{{ opt }}</span>
       </label>
       {% endfor %}
     </div>
   </section>
-  {% endfor %}
 
-  <button class="btn btn-success" type="submit">Отправить ответы</button>
+  <button class="btn btn-success" type="submit">
+    {% if q_number < q_total %}Ответить и далее{% else %}Завершить тест{% endif %}
+  </button>
 </form>
+
+{# Скрытая форма таймаута: JS отправляет её, когда время вышло. #}
+<form id="timeout-form" method="post" action="/student/test/{{ attempt.id }}/timeout"></form>
+
+<script>
+  (function () {
+    var el = document.getElementById('timer');
+    if (!el) return;
+    var remaining = parseInt(el.getAttribute('data-remaining'), 10) || 0;
+    var danger = parseInt(el.getAttribute('data-danger'), 10) || 30;
+
+    function fmt(sec) {
+      var m = Math.floor(sec / 60), s = sec % 60;
+      return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    el.textContent = fmt(remaining);
+    if (remaining <= danger) el.classList.add('timer-danger');
+
+    var timerId = setInterval(function () {
+      remaining -= 1;
+      if (remaining <= danger) el.classList.add('timer-danger');
+      if (remaining <= 0) {
+        clearInterval(timerId);
+        el.textContent = '00:00';
+        // Время вышло — отправляем форму таймаута (не основную, чтобы не требовать выбранного варианта).
+        document.getElementById('timeout-form').submit();
+        return;
+      }
+      el.textContent = fmt(remaining);
+    }, 1000);
+  })();
+</script>
 {% endblock %}

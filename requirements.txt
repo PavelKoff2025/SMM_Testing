@@ -1,19 +1,25 @@
 # Web
-fastapi
-uvicorn[standard]
-jinja2
-python-multipart
-itsdangerous  # SessionMiddleware (подписанная кука студента)
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+jinja2==3.1.6
+python-multipart==0.0.32
+itsdangerous==2.2.0  # SessionMiddleware (подписанная кука студента)
 
 # База данных
-sqlalchemy
+sqlalchemy==2.0.52
 
 # Генерация тестов из PDF
-pdfplumber
-openai
+pdfplumber==0.11.10
+openai==3.3.1
 
-# Расписание доступа к тестам
-apscheduler
+# Расписание доступа к тестам + дворник зависших попыток
+apscheduler==3.11.3
 
 # Конфигурация из .env
-python-dotenv
+python-dotenv==1.2.3
+
+# ВАЖНО: starlette тащится транзитивно через fastapi. Версия starlette<1.0
+# (напр. 0.27 в системном python3) даёт старую сигнатуру TemplateResponse
+# без request-аргумента → 500 на всех шаблонах. Запускать только в venv:
+#   venv/bin/python -m uvicorn app.main:app --port 8765
+# Совместимая версия: starlette==1.6.0 (устанавливается автоматически с fastapi 0.141.1).

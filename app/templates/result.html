@@ -4,6 +4,10 @@
 {% set diff_labels = {"easy": "Лёгкий", "medium": "Средний", "logic": "Логика"} %}
 
 {% block content %}
+{% if attempt.status.value == 'timed_out' %}
+<div class="alert alert-timeout">⏱ Время на попытку истекло. Незаответленные вопросы засчитаны как ошибочные.</div>
+{% endif %}
+
 <section class="card result-card">
   <div class="result-banner {{ 'pass' if attempt.passed else 'fail' }}">
     <div class="score-circle">{{ attempt.score }}<span>/{{ questions_per_test }}</span></div>
@@ -16,6 +20,12 @@
     Порог зачёта: {{ test.pass_threshold }}.
   </p>
   <a href="/student" class="btn btn-outline">В кабинет студента</a>
+
+  {% if next_available %}
+  <div class="next-attempt">
+    Следующая попытка будет доступна <strong>{{ next_available }}</strong>
+  </div>
+  {% endif %}
 </section>
 
 <section class="card">

@@ -36,8 +36,8 @@
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Студент</th><th>Группа</th><th>Тест</th>
-        <th>Балл</th><th>Оценка</th><th>Ошибок</th><th>Дата</th><th></th>
+        <th>#</th><th>Студент</th><th>Группа</th><th>Тест</th><th>Попытка</th>
+        <th>Балл</th><th>Оценка</th><th>Статус</th><th>Ошибок</th><th>Дата</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -47,10 +47,17 @@
         <td>{{ a.student_name }}</td>
         <td>{{ a.group }}</td>
         <td><a href="/teacher/test/{{ a.test_id }}">{{ a.lecture_title }}</a></td>
+        <td>№{{ a.attempt_number }}</td>
         <td>{{ a.score }}/{{ questions_per_test }}</td>
         <td>
           {% if a.passed %}<span class="badge badge-pass">зачёт</span>
           {% else %}<span class="badge badge-fail">незачёт</span>{% endif %}
+        </td>
+        <td>
+          {% if a.status == 'timed_out' %}<span class="badge badge-closed">таймаут</span>
+          {% elif a.status == 'completed' %}<span class="badge badge-open">завершён</span>
+          {% elif a.status == 'in_progress' %}<span class="badge badge-scheduled">идёт</span>
+          {% else %}<span class="muted">—</span>{% endif %}
         </td>
         <td>{{ a.wrong_count }}</td>
         <td class="muted">{{ a.finished_at.strftime('%d.%m.%Y %H:%M') if a.finished_at else '—' }}</td>

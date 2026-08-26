@@ -5,6 +5,7 @@
 
 {% if student %}
 {# === Залогинен: тесты + результаты === #}
+{% if info %}<div class="alert alert-{% if info_error %}error{% else %}success{% endif %}">{{ info }}</div>{% endif %}
 <section class="card">
   <div class="row">
     <h2 style="margin:0">Кабинет студента</h2>
@@ -21,15 +22,40 @@
 
 <section class="card">
   <h3>Доступные тесты</h3>
-  <p class="muted">Тесты открываются после того, как лекция прочитана всем группам курса. На каждый тест — одна попытка.</p>
-  {% if tests %}
+  <p class="muted">Тесты открываются после того, как лекция прочитана всем группам курса. На каждый тест — 3 минуты: если время истекло, следующая попытка откроется через 24 часа. В зачёт идёт лучшая попытка.</p>
+  {% if test_states %}
   <div class="card-grid">
-    {% for t in tests %}
+    {% for s in test_states %}
     <div class="card test-card">
+      {% if s.in_progress %}
+      <span class="badge badge-scheduled">идёт попытка {{ s.in_progress.attempt_number }}</span>
+      {% elif s.cooldown_until_msk %}
+      <span class="badge badge-closed">кулдаун</span>
+      {% else %}
       <span class="badge badge-open">доступен</span>
-      <h3>{{ t.lecture_title }}</h3>
+      {% endif %}
+
+      <h3>{{ s.test.lecture_title }}</h3>
       <p class="muted">{{ questions_per_test }} вопросов · зачёт при ≥ {{ pass_threshold }} правильных</p>
-      <a href="/student/test/{{ t.id }}" class="btn">Пройти тест</a>
+
+      {% if s.best %}
+      <p class="best-result">
+        Лучший результат: <strong>{{ s.best.score }}/{{ questions_per_test }}</strong>
+        {% if s.best.passed %}<span class="badge badge-pass">зачёт</span>
+        {% else %}<span class="badge badge-fail">незачёт</span>{% endif %}
+        <span class="muted">(попытка {{ s.best.attempt_number }})</span>
+      </p>
+      {% endif %}
+
+      {% if s.in_progress %}
+      <a href="/student/test/{{ s.test.id }}" class="btn">Продолжить (в. {{ s.in_progress.attempt_number }})</a>
+      {% elif s.cooldown_until_msk %}
+      <button class="btn" type="button" disabled>Доступно с {{ s.cooldown_until_msk }}</button>
+      {% elif s.best %}
+      <a href="/student/test/{{ s.test.id }}" class="btn">Перепройти</a>
+      {% else %}
+      <a href="/student/test/{{ s.test.id }}" class="btn">Начать</a>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
@@ -46,12 +72,16 @@
   {% if attempts %}
   <table>
     <thead>
-      <tr><th>Лекция</th><th>Правильных</th><th>Результат</th></tr>
+      <tr><th>Лекция</th><th>Попытка</th><th>Правильных</th><th>Результат</th></tr>
     </thead>
     <tbody>
       {% for a in attempts %}
       <tr>
         <td><a href="/student/result/{{ a.id }}">{{ a.test.lecture_title }}</a></td>
+        <td>
+          №{{ a.attempt_number }}
+          {% if a.status.value == 'timed_out' %}<span class="badge badge-closed">таймаут</span>{% endif %}
+        </td>
         <td>{{ a.score }} / {{ questions_per_test }}</td>
         <td>
           {% if a.passed %}<span class="badge badge-pass">Зачёт</span>

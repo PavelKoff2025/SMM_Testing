@@ -2,24 +2,27 @@
 Итоговый допуск к финальному зачёту (Этап 9).
 
 Критерий допуска (из README, пороги в config):
-  • пройдено тестов >= ADMISSION_TEST_REQUIRED (9);
+  • пройдено тестов >= ADMISSION_TESTS_REQUIRED (9);
   • правильных ответов суммарно >= ADMISSION_CORRECT_REQUIRED (81 из 90).
 Оба условия одновременно → «допущен», иначе «не допущен».
 
-Одна попытка на тест заложена в моделях (UniqueConstraint student_id+test_id),
-поэтому число попыток студента = число пройденных им тестов.
+Поточный режим с перепрохождением (День 1): несколько попыток на тест.
+В зачёт идёт ЛУЧШАЯ попытка по каждому тесту: total_correct = Σ по тестам
+max(score); taken = число тестов с ≥1 завершённой/таймаутной попыткой;
+passed = число тестов, где лучшая попытка ≥ pass_threshold. in_progress
+попытки не учитываются (score ещё не финализирован).
 
-Запрос — один агрегат по студентам с LEFT JOIN Attempt: студенты без попыток
-тоже попадают в отчёт (пройдено 0, «не допущен») — так преподаватель видит
-и тех, кто ещё не начинал.
+Запрос — два уровня: подзапрос «лучшая попытка на студент+тест», затем
+агрегат по студентам с LEFT JOIN к нему (студенты без попыток попадают в
+отчёт с taken=0, «не допущен» — преподаватель видит и тех, кто не начинал).
 """
 from collections import namedtuple
 
-from sqlalchemy import case, func
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import config
-from app.models import Attempt, Student
+from app.models import Attempt, AttemptStatus, Student
 
 
 AdmissionRow = namedtuple(
@@ -30,9 +33,10 @@ AdmissionRow = namedtuple(
         "last_name",
         "group",
         "email",
-        "taken",        # пройдено тестов (число попыток)
-        "passed",       # зачтено тестов
-        "total_correct",  # суммарно правильных ответов
+        "taken",        # пройдено тестов (с ≥1 завершённой попыткой)
+        "passed",       # зачтено тестов (лучшая попытка ≥ pass_threshold)
+        "total_correct",  # суммарно правильных (по лучшим попыткам)
+        "attempts_count",  # всего завершённых/таймаутных попыток (День 3)
         "admitted",     # bool — допущен/не допущен
     ],
 )
@@ -52,7 +56,33 @@ def admission_report(db: Session) -> list[AdmissionRow]:
     Сортировка: сначала не допущенные (чтобы обратить внимание), затем по фамилии.
     На защите нагляднее, когда «проблемные» студенты наверху.
     """
-    passed_expr = case((Attempt.passed == True, 1), else_=0)  # noqa: E712
+    # Лучшая попытка на (студент, тест) среди завершённых/таймаутных.
+    # best_score = max(score); best_passed = max(passed) — корректно отражает
+    # «зачёл ли лучший результат порог»: если максимум score ≥ pass_threshold,
+    # то именно у той попытки passed=True, значит max(passed)=1.
+    best = (
+        db.query(
+            Attempt.student_id.label("sid"),
+            Attempt.test_id.label("tid"),
+            func.max(Attempt.score).label("best_score"),
+            func.max(Attempt.passed).label("best_passed"),
+        )
+        .filter(Attempt.status.in_([AttemptStatus.completed, AttemptStatus.timed_out]))
+        .group_by(Attempt.student_id, Attempt.test_id)
+        .subquery()
+    )
+
+    # Всего попыток по студенту (завершённых/таймаутных) — колонка «Попыток»:
+    # преподаватель видит, кто перепроходил. Считаем отдельно, не по best.
+    att_count = (
+        db.query(
+            Attempt.student_id.label("sid"),
+            func.count(Attempt.id).label("cnt"),
+        )
+        .filter(Attempt.status.in_([AttemptStatus.completed, AttemptStatus.timed_out]))
+        .group_by(Attempt.student_id)
+        .subquery()
+    )
 
     rows = (
         db.query(
@@ -61,20 +91,23 @@ def admission_report(db: Session) -> list[AdmissionRow]:
             Student.last_name,
             Student.group,
             Student.email,
-            func.count(Attempt.id).label("taken"),
-            func.coalesce(func.sum(passed_expr), 0).label("passed"),
-            func.coalesce(func.sum(Attempt.score), 0).label("total_correct"),
+            func.count(best.c.tid).label("taken"),  # COUNT ненулевых tid
+            func.coalesce(func.sum(best.c.best_passed), 0).label("passed"),
+            func.coalesce(func.sum(best.c.best_score), 0).label("total_correct"),
+            func.coalesce(att_count.c.cnt, 0).label("attempts_count"),
         )
-        .outerjoin(Attempt, Attempt.student_id == Student.id)
+        .outerjoin(best, best.c.sid == Student.id)
+        .outerjoin(att_count, att_count.c.sid == Student.id)
         .group_by(Student.id)
         .all()
     )
 
     result = []
-    for sid, fn, ln, group, email, taken, passed, total in rows:
+    for sid, fn, ln, group, email, taken, passed, total, att_cnt in rows:
         taken = int(taken or 0)
         passed = int(passed or 0)
         total = int(total or 0)
+        att_cnt = int(att_cnt or 0)
         result.append(
             AdmissionRow(
                 student_id=sid,
@@ -85,6 +118,7 @@ def admission_report(db: Session) -> list[AdmissionRow]:
                 taken=taken,
                 passed=passed,
                 total_correct=total,
+                attempts_count=att_cnt,
                 admitted=_is_admitted(taken, total),
             )
         )
