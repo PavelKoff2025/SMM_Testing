@@ -47,6 +47,13 @@ async def lifespan(app: FastAPI):
     # таблицы — поэтому правки схемы делаются идемпотентным скриптом migrate.
     from app.migrate import run_migrations
     run_migrations()
+    # Демо-автосид: на PaaS с эфемерным диском (Render free) при каждом старте
+    # БД пустая. Если DEMO_AUTOSEED=1 и тестов нет — поднимаем демо (тест +
+    # студентов с попытками), чтобы комиссия сразу видела живой сервис.
+    # Локально флаг выключен — локальная БД не трогается.
+    if config.DEMO_AUTOSEED:
+        from app.seed import seed_demo_for_deploy
+        seed_demo_for_deploy()
     # Планировщик: догоняющая проверка + регулярный перевод scheduled→open.
     start_scheduler(app)
     try:

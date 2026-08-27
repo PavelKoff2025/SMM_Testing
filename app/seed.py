@@ -192,6 +192,67 @@ def demo_data() -> None:
         db.close()
 
 
+def seed_demo_for_deploy() -> None:
+    """Автосид для демо-деплоя (Render free): один тест + студенты с попытками.
+
+    Вызывается из lifespan при DEMO_AUTOSEED=1 и пустой БД. На эфемерном диске
+    PaaS при каждом старте БД пустая — эта функция поднимает живое демо:
+      1. демо-тест лекции 1 из tests_data/lecture_01_demo.json;
+      2. открывает его (status=open) — виден студентам;
+      3. двух демо-студентов с попытками (Петров 8/10 и 5/10 → лучшая 8;
+         Смирнова 10/10) — для аналитики, разбора и раздела «Допуск».
+
+    Идемпотентна по email-суффиксу _demo: повторный запуск не дублирует.
+    Все ошибки логируются, но не роняют старт приложения — демо не должно
+    блокировать запуск сервиса.
+    """
+    from config import TESTS_DATA_DIR
+    from app.models import Student, Test, TestStatus
+    from app.services.test_loader import load_test_from_file
+
+    demo_path = TESTS_DATA_DIR / "lecture_01_demo.json"
+    db = SessionLocal()
+    try:
+        # 1) Демо-тест лекции 1 (если ещё нет).
+        test = db.query(Test).order_by(Test.id).first()
+        if test is None:
+            if not demo_path.exists():
+                print(f"[demo-seed] {demo_path} не найден — демо-тест не загружен.")
+                return
+            created, test = load_test_from_file(demo_path, db)
+            print(f"[demo-seed] тест «{test.lecture_title}» #{test.id} "
+                  f"({'создан' if created else 'уже был'}).")
+        else:
+            print(f"[demo-seed] тесты уже есть ({db.query(Test).count()} шт.) — пропускаю загрузку.")
+
+        # 2) Открыть демо-тест, чтобы он был виден студентам.
+        if test.status != TestStatus.open:
+            test.status = TestStatus.open
+            db.commit()
+            print(f"[demo-seed] тест «{test.lecture_title}» открыт (status=open).")
+
+        # 3) Демо-студенты с попытками — если ещё нет.
+        if db.query(Student).filter(Student.email.like("%_demo@misis.ru")).count() == 0:
+            petrov = Student(first_name="Иван", last_name="Петров", group="МО-201",
+                             email="petrov_demo@misis.ru")
+            smirnova = Student(first_name="Анна", last_name="Смирнова", group="МО-201",
+                               email="smirnova_demo@misis.ru")
+            db.add_all([petrov, smirnova])
+            db.commit()
+            db.refresh(petrov)
+            db.refresh(smirnova)
+            _make_attempt(db, petrov, test, n_correct=8, timed_out=False, started_offset_min=120)
+            _make_attempt(db, petrov, test, n_correct=5, timed_out=False, started_offset_min=90)
+            _make_attempt(db, smirnova, test, n_correct=10, timed_out=False, started_offset_min=60)
+            print("[demo-seed] создано 2 демо-студента с 3 попытками.")
+        else:
+            print("[demo-seed] демо-студенты уже есть — пропускаю.")
+    except Exception as e:
+        print(f"[demo-seed] ошибка (старт продолжится): {e}")
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     reset = "--reset" in args

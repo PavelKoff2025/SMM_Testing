@@ -1,0 +1,38 @@
+# Render Blueprint для демо-деплоя SMM Testing (free-тариф).
+#
+# Назначение: живое демо для защиты финального учебного проекта.
+# Боевой продакшен — отдельная задача, не раньше февраля 2027.
+#
+# Особенности демо на Render free:
+#   • диск эфемерный → БД SQLite обнуляется при перезапуске/деплое;
+#     DEMO_AUTOSEED=1 при старте на пустой БД поднимает демо-тест и
+#     двух студентов с попытками (см. app/seed.py: seed_demo_for_deploy);
+#   • AI_MOCK=1 — генерация вопросов из PDF работает в мок-режиме
+#     (демо-вопросы без вызова OpenAI, ключ не нужен);
+#   • APP_ENV=dev — старт не падает на дефолтных секретах; HTTPS у Render
+#     есть из коробки, сессия работает.
+#
+# Пароль преподавателя задаётся ВРУЧНУЮ в dashboard Render (TEACHER_PASSWORD,
+# sync: false ниже) — не хранится в репо. Для демо комиссии сообщите его отдельно.
+services:
+  - type: web
+    name: smm-testing
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: APP_ENV
+        value: dev
+      - key: AI_MOCK
+        value: "1"
+      - key: DEMO_AUTOSEED
+        value: "1"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: TEACHER_PASSWORD
+        sync: false  # ввести вручную в dashboard Render; для демо можно "demo"
