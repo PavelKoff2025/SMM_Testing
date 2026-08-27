@@ -153,6 +153,30 @@ def _validate_chosen(raw) -> int:
     return chosen
 
 
+@router.get("/student/guide", response_class=HTMLResponse)
+async def student_guide(request: Request):
+    """Страница-инструкция для студента: как зарегистрироваться и пройти тест.
+
+    Доступна без входа — чтобы студент мог прочитать до регистрации. Все
+    формулировки кнопок и бейджей продублированы из student.html / take.html /
+    result.html, чтобы текст инструкции совпадал с интерфейсом.
+    """
+    return _templates(request).TemplateResponse(
+        request,
+        "student_guide.html",
+        {
+            "title": "Инструкция студента",
+            "questions_per_test": config.QUESTIONS_PER_TEST,
+            "pass_threshold": config.PASS_THRESHOLD,
+            "time_limit_minutes": max(1, round(config.TEST_TIME_LIMIT_SECONDS / 60)),
+            "danger_seconds": config.TIMER_DANGER_SECONDS,
+            "tests_required": config.ADMISSION_TESTS_REQUIRED,
+            "correct_required": config.ADMISSION_CORRECT_REQUIRED,
+            "total_questions": config.ADMISSION_TOTAL,
+        },
+    )
+
+
 @router.get("/student", response_class=HTMLResponse)
 async def cabinet(request: Request, db: Session = Depends(get_db)):
     """Кабинет студента: залогинен — тесты + состояние попыток; нет — форма регистрации.
@@ -197,6 +221,10 @@ async def cabinet(request: Request, db: Session = Depends(get_db)):
             "test_states": test_states,
             "questions_per_test": config.QUESTIONS_PER_TEST,
             "pass_threshold": config.PASS_THRESHOLD,
+            "time_limit_minutes": max(1, round(config.TEST_TIME_LIMIT_SECONDS / 60)),
+            "tests_required": config.ADMISSION_TESTS_REQUIRED,
+            "correct_required": config.ADMISSION_CORRECT_REQUIRED,
+            "total_questions": config.ADMISSION_TOTAL,
             "error": None,
             "info": flash_msg,
             "info_error": flash_err,

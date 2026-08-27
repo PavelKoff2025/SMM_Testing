@@ -10,6 +10,7 @@
   <div class="row">
     <h2 style="margin:0">Кабинет студента</h2>
     <span class="spacer"></span>
+    <a href="/student/guide" class="btn btn-outline" target="_blank" rel="noopener">Инструкция</a>
     <form method="post" action="/student/logout" style="margin:0">
       <button class="btn btn-outline" type="submit">Выйти</button>
     </form>
@@ -96,6 +97,20 @@
   {% endif %}
 </section>
 
+{# Краткая шпаргалка внизу кабинета #}
+<details class="card guide-cheatsheet">
+  <summary>Краткая шпаргалка: как пройти тест</summary>
+  <div class="cheatsheet-body">
+    <p><strong>Войти.</strong> Имя, фамилия, группа, корпоративная почта <code>@misis.ru</code>. Один раз — потом входите по ней же.</p>
+    <p><strong>Тест.</strong> Найдите карточку <span class="badge badge-open">доступен</span> → «Начать».</p>
+    <p><strong>Время.</strong> {{ questions_per_test }} вопросов на {{ time_limit_minutes if time_limit_minutes is defined else 3 }} минуты, по одному вопросу на экране. Назад вернуться нельзя.</p>
+    <p><strong>Зачёт.</strong> Не менее {{ pass_threshold }} правильных. В зачёт идёт <strong>лучшая попытка</strong>.</p>
+    <p><strong>Не успели.</strong> Таймаут → следующая попытка через 24 часа. Если завершили сами — перепройти можно сразу.</p>
+    <p><strong>Допуск.</strong> Пройти все {{ tests_required if tests_required is defined else 9 }} тестов и набрать ≥ {{ correct_required if correct_required is defined else 81 }}/{{ total_questions if total_questions is defined else 90 }} правильных.</p>
+    <p class="muted">Подробнее — на странице <a href="/student/guide" target="_blank" rel="noopener">Инструкция</a>.</p>
+  </div>
+</details>
+
 {% else %}
 {# === Не залогинен: форма регистрации/входа === #}
 <section class="card">
@@ -125,6 +140,11 @@
 
     <button class="btn" type="submit">Войти / зарегистрироваться</button>
   </form>
+  <p class="muted" style="margin-top:1rem">
+    Впервые здесь? Прочитайте
+    <a href="/student/guide" target="_blank" rel="noopener">инструкцию студента</a>
+    — как проходить тесты, сколько времени даётся и как получить зачёт.
+  </p>
 </section>
 {% endif %}
 

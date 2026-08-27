@@ -1,11 +1,52 @@
 {% extends "base.html" %}
-{% block title %}Тесты по лекциям{% endblock %}
+{% block title %}SMM Testing — тестирование по курсу «Взаимодействие с социальными медиа»{% endblock %}
 
 {% block content %}
+
+{# ===== Hero: куда попал пользователь ===== #}
+<section class="hero card">
+  <span class="badge badge-scheduled">НИТУ МИСИС · ИБО</span>
+  <h1>SMM&nbsp;Testing</h1>
+  <p class="hero-lead">
+    Сервис тестирования студентов по курсу
+    «Взаимодействие с социальными медиа».
+    Здесь студенты проходят тесты по лекциям и получают зачёт автоматически,
+    а преподаватель управляет тестами и следит за успеваемостью групп.
+  </p>
+  <div class="row">
+    <a href="/student" class="btn">Я студент — пройти тест</a>
+    <a href="/teacher" class="btn btn-outline">Я преподаватель — войти в кабинет</a>
+  </div>
+</section>
+
+{# ===== Дорожки: что делать каждой роли ===== #}
+<div class="role-grid">
+  <section class="card role-card">
+    <h3>Студентам</h3>
+    <ol class="role-steps">
+      <li>Зарегистрируйтесь в <a href="/student">кабинете студента</a> (ФИО, e-mail, группа).</li>
+      <li>Выберите лекцию из списка открытых тестов ниже.</li>
+      <li>Пройдите тест: {{ questions_per_test }} вопросов на {{ time_limit_minutes }} минуты.</li>
+      <li>Зачёт — при ≥&nbsp;{{ pass_threshold }} правильных. Перепройти можно через 24&nbsp;часа, засчитывается лучшая попытка.</li>
+    </ol>
+  </section>
+
+  <section class="card role-card">
+    <h3>Преподавателям</h3>
+    <ol class="role-steps">
+      <li>Войдите в <a href="/teacher">кабинет преподавателя</a> по секретному ключу.</li>
+      <li>Создавайте тесты по лекциям — вопросы можно сгенерировать из PDF.</li>
+      <li>Открывайте тест по расписанию или вручную для нужных групп.</li>
+      <li>Смотрите аналитику по студентам, группам и лекциям.</li>
+    </ol>
+  </section>
+</div>
+
+{# ===== Список открытых тестов ===== #}
 <section class="card">
-  <h2>Тесты по лекциям</h2>
+  <h2>Открытые тесты</h2>
   <p class="muted">
-    Каждый тест — {{ questions_per_test }} вопросов, зачёт при ≥ {{ pass_threshold }} правильных.
+    Каждый тест — {{ questions_per_test }} вопросов, зачёт при ≥&nbsp;{{ pass_threshold }} правильных.
     Чтобы пройти тест, зарегистрируйтесь в <a href="/student">кабинете студента</a>.
   </p>
 </section>
@@ -27,4 +68,33 @@
   <p class="muted">Доступ открывается после того, как лекция прочитана всем группам курса.</p>
 </section>
 {% endif %}
+
+{# ===== О курсе и авторе ===== #}
+<section class="card author-card" id="author">
+  <div class="author-photo">
+    <img src="/static/img/author.jpg" alt="Павел Васильевич Кариков">
+  </div>
+  <div class="author-info">
+    <h2>О курсе и авторе</h2>
+    <p>
+      Курс <strong>«Взаимодействие с социальными медиа»</strong> (108&nbsp;ак.&nbsp;ч.,
+      бакалавры 2&nbsp;курса) — авторский курс, который ведётся в Институте
+      базового образования НИТУ&nbsp;МИСИС с 2025&nbsp;года.
+    </p>
+    <p class="author-name">Павел Васильевич Кариков</p>
+    <p>
+      Практикующий маркетолог, консультант, ментор и промпт-инженер.
+      Преподаватель ИБО НИТУ&nbsp;МИСИС. В маркетинге — 25+ лет,
+      с 2017&nbsp;года в диджитал, работает в подходе брендперформанс.
+    </p>
+    <ul class="author-contacts">
+      <li><a href="https://pavelkarikoff.ru" target="_blank" rel="noopener noreferrer">pavelkarikoff.ru</a></li>
+      <li><a href="https://t.me/pavelkarikoff" target="_blank" rel="noopener noreferrer">@pavelkarikoff</a> · Telegram</li>
+      <li><a href="https://vk.com/pavelkarikoff" target="_blank" rel="noopener noreferrer">vk.com/pavelkarikoff</a></li>
+      <li><a href="https://tenchat.ru/pavelkarikoff" target="_blank" rel="noopener noreferrer">tenchat.ru/pavelkarikoff</a></li>
+      <li><a href="mailto:pkarikov@yandex.ru">pkarikov@yandex.ru</a></li>
+    </ul>
+  </div>
+</section>
+
 {% endblock %}

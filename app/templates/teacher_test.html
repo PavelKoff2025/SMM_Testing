@@ -44,6 +44,11 @@
         <button class="btn btn-success" type="submit" {% if not can_open %}disabled{% endif %}>Открыть доступ</button>
       </form>
     {% endif %}
+    {# Редактировать вопросы: только для draft/scheduled (не open/closed),
+       чтобы не ломать уже сданные студентами результаты. #}
+    {% if test.status.value not in ("open", "closed") %}
+      <a href="/teacher/test/{{ test.id }}/edit" class="btn btn-outline">✎ Редактировать вопросы</a>
+    {% endif %}
     {% if test.source.value == "pdf" %}
       <form method="post" action="/teacher/test/{{ test.id }}/generate" style="margin:0" data-disable-on-submit>
         <button class="btn" type="submit"

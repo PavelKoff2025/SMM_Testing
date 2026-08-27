@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 import config
@@ -96,6 +97,30 @@ def _consume_flash(request: Request) -> tuple[str | None, str | None]:
 
 # === Вход / выход ===
 
+@router.get("/teacher/guide", response_class=HTMLResponse)
+async def teacher_guide(request: Request):
+    """Страница-инструкция для преподавателя: пошаговое руководство по кабинету.
+
+    Доступна без входа — это сделано намеренно: чтобы новый преподаватель (SaaS)
+    мог прочитать инструкцию до того, как получит пароль. Все названия кнопок
+    и полей в инструкции продублированы из шаблонов кабинета, чтобы текст
+    совпадал с интерфейсом.
+    """
+    return _templates(request).TemplateResponse(
+        request,
+        "teacher_guide.html",
+        {
+            "title": "Инструкция преподавателя",
+            "max_upload_mb": config.MAX_UPLOAD_BYTES // (1024 * 1024),
+            "time_limit_minutes": max(1, round(config.TEST_TIME_LIMIT_SECONDS / 60)),
+            "schedule_tz": config.SCHEDULE_TZ,
+            "tests_required": config.ADMISSION_TESTS_REQUIRED,
+            "correct_required": config.ADMISSION_CORRECT_REQUIRED,
+            "total_questions": config.ADMISSION_TOTAL,
+        },
+    )
+
+
 @router.get("/teacher", response_class=HTMLResponse)
 async def teacher_index(request: Request, db: Session = Depends(get_db)):
     """Кабинет преподавателя: если не вошёл — форма входа, иначе дашборд."""
@@ -147,6 +172,9 @@ def _dashboard(request: Request, db: Session) -> HTMLResponse:
             "flash": msg,
             "error": err,
             "questions_per_test": config.QUESTIONS_PER_TEST,
+            "tests_required": config.ADMISSION_TESTS_REQUIRED,
+            "correct_required": config.ADMISSION_CORRECT_REQUIRED,
+            "total_questions": config.ADMISSION_TOTAL,
         },
     )
 
@@ -171,7 +199,255 @@ async def teacher_logout(request: Request):
     return RedirectResponse("/teacher", status_code=303)
 
 
-# === Загрузка теста ===
+# === Создание теста вручную и редактирование вопросов ===
+
+# Дефолтная сложность для пустой заготовки вопроса формы создания.
+_EMPTY_DIFF = "easy"
+
+
+def _empty_questions() -> list[dict]:
+    """10 пустых заготовок вопросов для формы создания.
+
+    Шаблон один и тот же для создания и редактирования, поэтому при создании
+    передаём список «пустышек» с дефолтной сложностью easy — счётчик 4/4/2
+    при этом сразу показывает 10/0/0 лёгких и блокирует отправку, пока
+    преподаватель не расставит сложности.
+    """
+    return [
+        {"number": i, "difficulty": _EMPTY_DIFF, "text": "", "options": ["", "", "", ""], "correct_answer": -1}
+        for i in range(1, config.QUESTIONS_PER_TEST + 1)
+    ]
+
+
+def _questions_from_test(test: Test) -> list[dict]:
+    """Текущие вопросы теста → список dict для предзаполнения формы редактирования.
+
+    Сортируем по number, чтобы порядок в форме совпадал с порядком прохождения.
+    """
+    qs = sorted(test.questions, key=lambda q: q.number)
+    return [
+        {
+            "number": q.number,
+            "difficulty": q.difficulty.value,
+            "text": q.text,
+            "options": list(q.options),
+            "correct_answer": q.correct_answer,
+        }
+        for q in qs
+    ]
+
+
+def _form_to_questions(form) -> tuple[str, list[dict]]:
+    """Собрать из multipart-формы (request.form()) dict теста.
+
+    Возвращает (lecture_title, questions). Имена полей: lecture_title,
+    q{i}_text, q{i}_opt_0..3, q{i}_correct (0..3), q{i}_difficulty.
+    Общая для POST-создания и POST-редактирования — валидацию проходит
+    TestIn дальше, здесь только сборка.
+    """
+    lecture_title = (form.get("lecture_title") or "").strip()
+    questions = []
+    for i in range(1, config.QUESTIONS_PER_TEST + 1):
+        raw_correct = form.get(f"q{i}_correct")
+        try:
+            correct = int(raw_correct) if raw_correct not in (None, "") else -1
+        except ValueError:
+            correct = -1
+        questions.append({
+            "number": i,
+            "difficulty": form.get(f"q{i}_difficulty") or "",
+            "text": (form.get(f"q{i}_text") or "").strip(),
+            "options": [(form.get(f"q{i}_opt_{j}") or "").strip() for j in range(4)],
+            "correct_answer": correct,
+        })
+    return lecture_title, questions
+
+
+_DIFFICULTY_CHOICES = [("easy", "Лёгкий"), ("medium", "Средний"), ("logic", "Логика")]
+
+
+def _test_status_label(test: Test) -> str:
+    """Человекочитаемый статус теста для подписи под формой редактирования."""
+    return {
+        TestStatus.draft: "черновиком",
+        TestStatus.scheduled: "запланированным",
+    }.get(test.status, test.status.value)
+
+
+@router.get("/teacher/new", response_class=HTMLResponse)
+async def teacher_new_test_form(request: Request):
+    """Форма ручного создания теста: 10 вопросов по полям, без JSON-файла.
+
+    Альтернатива загрузке JSON для нетехнических преподавателей: вопросы
+    вводятся прямо в кабинете, а собираются в такой же dict, который
+    обрабатывает load_test_from_data. Вся валидация (4/4/2, 10 вопросов,
+    индексы) — общая с JSON-способом и редактором.
+    """
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+    flash, err = _consume_flash(request)
+    return _templates(request).TemplateResponse(
+        request,
+        "teacher_new_test.html",
+        {
+            "title": "Новый тест",
+            "page_title": "Новый тест (вручную)",
+            "action_url": "/teacher/new",
+            "back_url": "/teacher",
+            "submit_label": "Создать тест",
+            "is_edit": False,
+            "questions_per_test": config.QUESTIONS_PER_TEST,
+            "difficulties": _DIFFICULTY_CHOICES,
+            "questions": _empty_questions(),
+            "lecture_title_value": "",
+            "flash": flash,
+            "error": err,
+        },
+    )
+
+
+@router.post("/teacher/new")
+async def teacher_new_test_create(request: Request, db: Session = Depends(get_db)):
+    """Принять форму ручного теста, собрать dict и создать тест через load_test_from_data.
+
+    Клиентский live-счётчик 4/4/2 отсекает большинство ошибок до отправки;
+    серверная валидация (TestIn через load_test_from_data) — защита на крайний.
+    """
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    form = await request.form()
+    lecture_title, questions = _form_to_questions(form)
+
+    try:
+        created, test = load_test_from_data(
+            {"lecture_title": lecture_title, "questions": questions}, db
+        )
+    except ValidationError as e:
+        msg = "; ".join(err["msg"] for err in e.errors())
+        _flash(request, f"Тест не создан — проверьте поля: {msg}", error=True)
+        return RedirectResponse("/teacher/new", status_code=303)
+    except Exception as e:
+        _flash(request, f"Ошибка при создании теста: {e}", error=True)
+        return RedirectResponse("/teacher/new", status_code=303)
+
+    if created:
+        _flash(request, f"Тест «{test.lecture_title}» создан (черновик, 10 вопросов).")
+    else:
+        _flash(request, f"Тест «{test.lecture_title}» уже существует — пропущен.", error=True)
+    return RedirectResponse("/teacher", status_code=303)
+
+
+@router.get("/teacher/test/{test_id}/edit", response_class=HTMLResponse)
+async def teacher_edit_test_form(test_id: int, request: Request, db: Session = Depends(get_db)):
+    """Форма редактирования вопросов существующего теста.
+
+    Доступ — только вошедший преподаватель, только для draft/scheduled.
+    Открытый/закрытый тест править нельзя: иначе правильные ответы
+    рассинхронизируются с уже сданными студентами результатами. Вопросы
+    предзаполняются текущими значениями теста.
+    """
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    test = db.get(Test, test_id)
+    if test is None:
+        raise HTTPException(404, "Тест не найден")
+
+    flash, err = _consume_flash(request)
+
+    if test.status in (TestStatus.open, TestStatus.closed):
+        # Не даём править открытые/закрытые — результаты студентов не должны сломаться.
+        _flash(
+            request,
+            "Нельзя править открытый или закрытый тест — сначала закройте и создайте новый.",
+            error=True,
+        )
+        return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+    return _templates(request).TemplateResponse(
+        request,
+        "teacher_new_test.html",
+        {
+            "title": f"Редактирование: {test.lecture_title}",
+            "page_title": f"Редактирование теста «{test.lecture_title}»",
+            "action_url": f"/teacher/test/{test_id}/edit",
+            "back_url": f"/teacher/test/{test_id}",
+            "submit_label": "Сохранить вопросы",
+            "is_edit": True,
+            "test_status_label": _test_status_label(test),
+            "questions_per_test": config.QUESTIONS_PER_TEST,
+            "difficulties": _DIFFICULTY_CHOICES,
+            "questions": _questions_from_test(test),
+            "lecture_title_value": test.lecture_title,
+            "flash": flash,
+            "error": err,
+        },
+    )
+
+
+@router.post("/teacher/test/{test_id}/edit")
+async def teacher_edit_test_save(test_id: int, request: Request, db: Session = Depends(get_db)):
+    """Сохранить правки вопросов теста через attach_questions.
+
+    Защита:
+      • только вошедший преподаватель;
+      • только draft/scheduled — open/closed отсекаются (см. GET);
+      • при смене названия лекции — проверяем уникальность, иначе будет
+        дубль, а attach_questions требует совпадения lecture_title в данных
+        и в тесте, поэтому обновляем test.lecture_title ДО вызова.
+    Валидация 4/4/2, индексы и числа — общая, через TestIn в attach_questions.
+    """
+    redir = _require_teacher(request)
+    if redir:
+        return redir
+
+    test = db.get(Test, test_id)
+    if test is None:
+        raise HTTPException(404, "Тест не найден")
+
+    if test.status in (TestStatus.open, TestStatus.closed):
+        _flash(request, "Нельзя править открытый или закрытый тест.", error=True)
+        return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
+    form = await request.form()
+    lecture_title, questions = _form_to_questions(form)
+
+    # Смена названия: проверяем уникальность (другой тест не должен занимать).
+    if lecture_title != test.lecture_title:
+        existing = (
+            db.query(Test).filter(Test.lecture_title == lecture_title, Test.id != test.id).one_or_none()
+        )
+        if existing is not None:
+            _flash(request, f"Название «{lecture_title}» уже занято другим тестом.", error=True)
+            return RedirectResponse(f"/teacher/test/{test_id}/edit", status_code=303)
+        test.lecture_title = lecture_title
+
+    try:
+        # attach_questions заменяет вопросы: удаляет старые, вставляет новые,
+        # валидирует через TestIn. lecture_title в данных должен совпасть с test.
+        attach_questions(test, {"lecture_title": test.lecture_title, "questions": questions}, db)
+    except ValidationError as e:
+        msg = "; ".join(err["msg"] for err in e.errors())
+        # Откатываем возможное изменение названия — чтобы тест не «полуобновился».
+        db.rollback()
+        _flash(request, f"Вопросы не сохранены — проверьте поля: {msg}", error=True)
+        return RedirectResponse(f"/teacher/test/{test_id}/edit", status_code=303)
+    except ValueError as e:
+        db.rollback()
+        _flash(request, f"Вопросы не сохранены: {e}", error=True)
+        return RedirectResponse(f"/teacher/test/{test_id}/edit", status_code=303)
+    except Exception as e:
+        db.rollback()
+        _flash(request, f"Ошибка сохранения: {e}", error=True)
+        return RedirectResponse(f"/teacher/test/{test_id}/edit", status_code=303)
+
+    _flash(request, f"Вопросы теста «{test.lecture_title}» сохранены.")
+    return RedirectResponse(f"/teacher/test/{test_id}", status_code=303)
+
 
 @router.post("/teacher/upload/json")
 async def upload_json(request: Request, file: UploadFile, db: Session = Depends(get_db)):

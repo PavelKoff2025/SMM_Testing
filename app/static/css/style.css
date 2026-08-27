@@ -461,3 +461,208 @@ input[type="file"] {
   color: #8a6d12;
   font-weight: 500;
 }
+
+/* ============================================================
+   Главная страница: hero, дорожки ролей, блок автора
+   ============================================================ */
+
+/* Hero-блок — верхняя карточка-приветствие */
+.hero.card { padding: 2.25rem 2rem; }
+.hero h1 {
+  font-size: 2.4rem;
+  font-weight: 900;
+  margin: .75rem 0 .5rem;
+  letter-spacing: .01em;
+}
+.hero-lead {
+  font-size: 1.1rem;
+  color: #3a3a3a;
+  max-width: 70ch;
+  margin-bottom: 1.5rem;
+}
+.hero .row { gap: 1rem; }
+
+/* Дорожки «Студентам / Преподавателям» */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.role-card h3 { color: var(--misis-blue); margin-top: 0; }
+.role-steps {
+  margin: .25rem 0 0;
+  padding-left: 1.25rem;
+  line-height: 1.6;
+}
+.role-steps li { margin-bottom: .4rem; }
+
+/* Блок «О курсе и авторе» — фото слева, текст справа */
+.author-card {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 1.75rem;
+  align-items: start;
+}
+.author-photo img {
+  width: 180px;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 4px solid var(--misis-blue);
+}
+.author-info h2 { margin-top: 0; }
+.author-name {
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--misis-navy);
+  margin: .5rem 0 .25rem;
+}
+.author-contacts {
+  list-style: none;
+  padding: 0;
+  margin: .75rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.25rem;
+}
+.author-contacts li { font-size: .95rem; }
+
+/* Адаптивность новых блоков */
+@media (max-width: 992px) {
+  .role-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .hero h1 { font-size: 1.8rem; }
+  .hero-lead { font-size: 1rem; }
+  .author-card {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+  .author-info { text-align: left; }
+  .author-contacts { justify-content: center; }
+}
+
+/* ============================================================
+   Инструкция преподавателя (teacher_guide) + шпаргалка
+   ============================================================ */
+
+.guide-toc {
+  margin: .25rem 0 0;
+  padding-left: 1.5rem;
+  columns: 2;
+  column-gap: 2rem;
+  line-height: 1.7;
+}
+.guide-toc a { font-weight: 500; }
+
+/* Нумерованные/маркированные шаги в инструкции */
+.guide-steps {
+  margin: .5rem 0;
+  padding-left: 1.5rem;
+  line-height: 1.65;
+}
+.guide-steps li { margin-bottom: .35rem; }
+
+/* Краткая шпаргалка внизу дашборда */
+.guide-cheatsheet {
+  padding: 1rem 1.75rem;
+  margin-bottom: 1.25rem;
+}
+.guide-cheatsheet > summary {
+  font-weight: 700;
+  color: var(--misis-navy);
+  cursor: pointer;
+  font-size: 1.05rem;
+  list-style: none;
+}
+.guide-cheatsheet > summary::-webkit-details-marker { display: none; }
+.guide-cheatsheet > summary::before {
+  content: "▸ ";
+  color: var(--misis-blue);
+}
+.guide-cheatsheet[open] > summary::before { content: "▾ "; }
+.cheatsheet-body { margin-top: .75rem; }
+.cheatsheet-body p { margin: .4rem 0; }
+
+/* Адаптив: оглавление в одну колонку на узких экранах */
+@media (max-width: 640px) {
+  .guide-toc { columns: 1; }
+}
+
+/* ============================================================
+   Форма ручного создания теста (teacher_new_test)
+   ============================================================ */
+
+.manual-q { padding: 1.25rem 1.75rem; }
+.manual-q-head {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .5rem;
+}
+.manual-diff-inline {
+  margin: 0 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-weight: 500;
+}
+.manual-diff-inline select {
+  width: auto;
+  padding: 8px 12px;
+}
+.manual-opts { gap: .5rem; }
+.manual-opt {
+  flex-wrap: nowrap;
+  align-items: center;
+  padding: 8px 12px;
+}
+.manual-opt .correct-radio {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--misis-green);
+  flex: 0 0 auto;
+  margin: 0;
+}
+.manual-opt .opt-text {
+  flex: 1 1 auto;
+  width: auto;
+  border: none;
+  padding: 4px 8px;
+  margin: 0;
+  border-radius: .6rem;
+  background: transparent;
+}
+.manual-opt .opt-text:focus {
+  outline: 2px solid var(--misis-blue);
+  outline-offset: -1px;
+  background: #fff;
+}
+.manual-opt:has(.correct-radio:checked) {
+  border-color: var(--misis-green);
+  background: #e7f6e1;
+}
+.manual-correct-hint {
+  margin: .75rem 0 .35rem;
+  font-size: .9rem;
+}
+
+/* Живой счётчик пропорции 4/4/2 */
+.counter {
+  font-weight: 600;
+  color: var(--misis-navy);
+  font-size: .95rem;
+}
+.counter-badge {
+  margin-left: .5rem;
+  padding: 3px 10px;
+  border-radius: 50px;
+  font-size: .8rem;
+  font-weight: 700;
+}
+.counter-ok { background: #e7f6e1; color: #2f7a1f; }
+.counter-bad { background: #fff4d6; color: #8a6d12; }
+
+#submit-btn:disabled { opacity: .5; cursor: not-allowed; }

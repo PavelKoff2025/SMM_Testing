@@ -128,6 +128,9 @@ async def index(request: Request, db: Session = Depends(get_db)):
             "title": "SMM Testing",
             "questions_per_test": config.QUESTIONS_PER_TEST,
             "pass_threshold": config.PASS_THRESHOLD,
+            # Тайм-лимит на тест в минутах — передаём в шаблон как целое,
+            # чтобы не хардкодить «3 минуты» в тексте для студентов.
+            "time_limit_minutes": max(1, round(config.TEST_TIME_LIMIT_SECONDS / 60)),
             "tests": tests,
         },
     )

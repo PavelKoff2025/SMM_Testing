@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="row">
+    <h2 style="margin:0">{{ page_title }}</h2>
+    <span class="spacer"></span>
+    <a href="{{ back_url }}" class="btn btn-outline">← Назад</a>
+  </div>
+  <p class="muted">
+    {% if is_edit %}
+      Правьте вопросы, варианты и правильные ответы. При сохранении старые
+      вопросы заменятся новыми. Пропорция <strong>4 лёгких + 4 средних + 2 логика</strong>
+      обязательна — счётчик сверху подскажет.
+    {% else %}
+      Заполните {{ questions_per_test }} вопросов — по 4 варианта ответа в каждом,
+      отметьте правильный и выберите сложность. Сервис сам соберёт готовый тест
+      в черновик. После этого откройте его студентам или запланируйте по времени.
+    {% endif %}
+  </p>
+</section>
+
+{% if flash %}<div class="alert alert-success">{{ flash }}</div>{% endif %}
+{% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+<section class="card">
+  <label for="lecture_title">Название лекции</label>
+  <input type="text" id="lecture_title" name="lecture_title" form="newtest"
+         maxlength="255" required placeholder="Например: Лекция 1. Введение в SMM"
+         value="{{ lecture_title_value or '' }}">
+  <p class="muted">Под этим названием тест увидят студенты. Должно быть уникальным.</p>
+</section>
+
+<form id="newtest" method="post" action="{{ action_url }}" data-disable-on-submit>
+
+  {# Живой счётчик пропорции 4/4/2 — обновляется JS, блокирует отправку, пока не совпадёт #}
+  <section class="card">
+    <div class="row">
+      <h3 style="margin:0">Сложность вопросов</h3>
+      <span class="spacer"></span>
+      <div class="counter" id="diff-counter" data-need-easy="4" data-need-medium="4" data-need-logic="2">
+        <span id="cnt-easy">0</span>/4 лёгких ·
+        <span id="cnt-medium">0</span>/4 средних ·
+        <span id="cnt-logic">0</span>/2 логика
+        <span class="counter-badge" id="counter-status">заполните</span>
+      </div>
+    </div>
+    <p class="muted">
+      Нужно ровно <strong>4 лёгких + 4 средних + 2 на логику</strong>. Когда пропорция
+      совпадёт и все поля заполнены — кнопка станет активной.
+    </p>
+  </section>
+
+  {% for q in questions %}
+  {% set i = loop.index %}
+  <section class="card manual-q">
+    <div class="manual-q-head">
+      <span class="q-num">{{ i }}</span>
+      <span class="muted">Вопрос {{ i }} из {{ questions_per_test }}</span>
+      <label class="manual-diff-inline">
+        Сложность:
+        <select name="q{{ i }}_difficulty" class="diff-select" data-q="{{ i }}">
+          {% for value, label in difficulties %}
+          <option value="{{ value }}" {% if q.difficulty == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <label for="q{{ i }}_text">Текст вопроса</label>
+    <textarea name="q{{ i }}_text" id="q{{ i }}_text" rows="2" required
+              placeholder="Сформулируйте вопрос">{{ q.text }}</textarea>
+
+    <p class="manual-correct-hint muted">Отметьте правильный вариант:</p>
+    <div class="options manual-opts">
+      {% for j in range(4) %}
+      <label class="option manual-opt">
+        <input type="radio" name="q{{ i }}_correct" value="{{ j }}" class="correct-radio" required
+               {% if q.correct_answer == j %}checked{% endif %}>
+        <input type="text" name="q{{ i }}_opt_{{ j }}" class="opt-text" maxlength="512" required
+               placeholder="Вариант {{ j + 1 }}" aria-label="Вариант {{ j + 1 }} для вопроса {{ i }}"
+               value="{{ q.options[j] if q.options and q.options|length > j else '' }}">
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+
+  <div class="row">
+    <button class="btn btn-success" type="submit" id="submit-btn" disabled>{{ submit_label }}</button>
+    <a href="{{ back_url }}" class="btn btn-outline">Отмена</a>
+  </div>
+  <p class="muted" style="margin-top:.75rem">
+    {% if is_edit %}
+      После сохранения тест остаётся {{ test_status_label }}. Дальше — «Открыть доступ»
+      или «Запланировать открытие», как обычно.
+    {% else %}
+      Появится в списке как <span class="badge badge-draft">draft</span> (черновик).
+      Дальше — «Открыть доступ» или «Запланировать открытие», как обычно.
+    {% endif %}
+  </p>
+</form>
+
+<script>
+  // Живой счётчик сложности: считаем выбранные значения всех 10 селектов,
+  // показываем 4/4/2 и блокируем отправку, пока пропорция не совпадёт
+  // и не заполнены все текстовые поля. Без зависимостей.
+  (function () {
+    var form = document.getElementById('newtest');
+    if (!form) return;
+    var submit = document.getElementById('submit-btn');
+    var need = { easy: 4, medium: 4, logic: 2 };
+
+    function recount() {
+      var counts = { easy: 0, medium: 0, logic: 0 };
+      form.querySelectorAll('.diff-select').forEach(function (sel) {
+        if (counts[sel.value] !== undefined) counts[sel.value] += 1;
+      });
+      document.getElementById('cnt-easy').textContent = counts.easy;
+      document.getElementById('cnt-medium').textContent = counts.medium;
+      document.getElementById('cnt-logic').textContent = counts.logic;
+
+      var ok = counts.easy === need.easy && counts.medium === need.medium && counts.logic === need.logic;
+
+      // Все текстовые поля заполнены и в каждом вопросе отмечен правильный вариант.
+      var textsFilled = true;
+      form.querySelectorAll('.opt-text, [name="lecture_title"], textarea').forEach(function (f) {
+        if (!f.value.trim()) textsFilled = false;
+      });
+      var radiosOk = form.querySelectorAll('.correct-radio:checked').length === 10;
+
+      var status = document.getElementById('counter-status');
+      if (ok && textsFilled && radiosOk) {
+        status.textContent = 'готово ✓';
+        status.className = 'counter-badge counter-ok';
+        submit.disabled = false;
+      } else {
+        status.textContent = ok ? 'остались пустые поля' : 'не 4/4/2';
+        status.className = 'counter-badge counter-bad';
+        submit.disabled = true;
+      }
+    }
+
+    form.addEventListener('input', recount);
+    form.addEventListener('change', recount);
+    recount();
+  })();
+</script>
+{% endblock %}

@@ -16,6 +16,11 @@
     <input type="password" id="password" name="password" required autofocus>
     <button class="btn" type="submit">Войти</button>
   </form>
+  <p class="muted" style="margin-top:1rem">
+    Впервые здесь? Прочитайте
+    <a href="/teacher/guide" target="_blank" rel="noopener">инструкцию преподавателя</a>
+    — как загружать тесты, открывать доступ и смотреть успеваемость.
+  </p>
 </section>
 
 {% else %}
@@ -24,6 +29,7 @@
   <div class="row">
     <h2 style="margin:0">Кабинет преподавателя</h2>
     <span class="spacer"></span>
+    <a href="/teacher/guide" class="btn btn-outline" target="_blank" rel="noopener">Инструкция</a>
     <a href="/teacher/analytics" class="btn">Аналитика</a>
     <a href="/teacher/admission" class="btn">Допуск</a>
     <form method="post" action="/teacher/logout" style="margin:0">
@@ -47,8 +53,14 @@
   </div>
 </section>
 
-{# Загрузка теста — две формы #}
+{# Загрузка теста — три способа #}
 <div class="card-grid">
+  <section class="card">
+    <h3>Создать тест вручную</h3>
+    <p class="muted">Заполнить 10 вопросов прямо в кабинете: по 4 варианта и отметка правильного. Проще всего, без файлов.</p>
+    <a href="/teacher/new" class="btn">Открыть форму</a>
+  </section>
+
   <section class="card">
     <h3>Загрузить готовый JSON-тест</h3>
     <p class="muted">Файл формата <code>{"lecture_title", "questions": [...]}</code> с 10 вопросами в пропорции 4/4/2. Тест создаётся как черновик.</p>
@@ -101,6 +113,21 @@
   <div class="empty"><p>Тестов пока нет. Загрузите JSON-тест или PDF-презентацию выше.</p></div>
   {% endif %}
 </section>
+
+{# Краткая шпаргалка внизу дашборда #}
+<details class="card guide-cheatsheet">
+  <summary>Краткая шпаргалка: как всё работает</summary>
+  <div class="cheatsheet-body">
+    <p><strong>Создать тест.</strong> Вручную (форма «10 вопросов по полям», проще всего), загрузить готовый JSON или PDF-презентацию → «Сгенерировать вопросы из PDF».</p>
+    <p><strong>Поправить вопросы.</strong> Откройте тест (draft/scheduled) → «✎ Редактировать вопросы» — меняйте тексты, варианты, правильный ответ.</p>
+    <p><strong>Открыть студентам.</strong> Откройте тест → «Открыть доступ». Нужны 10 вопросов.</p>
+    <p><strong>Открыть по расписанию.</strong> Откройте тест → блок «Расписание» → выберите дату/время (МСК) → «Запланировать открытие». Откроется само.</p>
+    <p><strong>Закрыть тест.</strong> Откройте тест → «Закрыть тест». Попытки сохраняются.</p>
+    <p><strong>Прогресс студентов.</strong> Кнопка «Аналитика»: ошибки по сложности + таблица попыток с разбором.</p>
+    <p><strong>Допуск к зачёту.</strong> Кнопка «Допуск»: кто готов ({{ tests_required }} тестов, ≥&nbsp;{{ correct_required }}/{{ total_questions }} правильных, лучшая попытка). Там же — экспорт в CSV.</p>
+    <p class="muted">Подробнее — на странице <a href="/teacher/guide" target="_blank" rel="noopener">Инструкция</a>.</p>
+  </div>
+</details>
 {% endif %}
 
 {% endblock %}
