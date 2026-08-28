@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>SMM_testing — защита итогового проекта</title>
+<style>
+  :root{
+    --ink:#0A1E64;      /* глубокий синий — основной */
+    --blue:#0541F0;     /* электрик — акцент */
+    --coral:#FA2E53;    /* коралл — акцент */
+    --yellow:#F6E14F;   /* жёлтый — подсветка */
+    --green:#2f7a1f;    /* успех */
+    --bg:#F9F9FF;       /* светлый фон */
+    --panel:#eef1ff;    /* мягкая плашка */
+    --muted:#5b6478;    /* приглушённый текст */
+    --line:#d6dbf0;
+  }
+
+  @page{
+    size: 297mm 167mm;   /* 16:9 */
+    margin: 0;
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  html,body{
+    font-family:"Helvetica Neue","Helvetica","Arial",sans-serif;
+    color:var(--ink);
+    hyphens:none;
+  }
+
+  .slide{
+    width:297mm; height:167mm;
+    padding:20mm 26mm 16mm 26mm;
+    position:relative;
+    page-break-after:always;
+    overflow:hidden;
+    background:var(--bg);
+  }
+  .slide:last-child{ page-break-after:auto; }
+
+  /* тёмные слайды (титул, итог) */
+  .slide.dark{ background:var(--ink); color:#fff; }
+  .slide.dark .muted{ color:#9aa6cc; }
+  .slide.dark .footer{ color:#5b6aa0; border-color:#22347f; }
+
+  /* верхняя метка раздела */
+  .kicker{
+    text-transform:uppercase;
+    letter-spacing:2.5px;
+    font-size:11px;
+    font-weight:700;
+    color:var(--blue);
+    margin-bottom:10px;
+  }
+  .slide.dark .kicker{ color:var(--yellow); }
+
+  h1{ font-size:42px; font-weight:800; line-height:1.1; letter-spacing:-.5px; }
+  h2{ font-size:30px; font-weight:800; line-height:1.12; letter-spacing:-.3px; margin-bottom:14px; }
+  h3{ font-size:17px; font-weight:700; }
+  .lead{ font-size:15.5px; line-height:1.5; color:var(--muted); max-width:200mm; }
+  .muted{ color:var(--muted); }
+
+  /* акцентная полоска */
+  .accentbar{
+    width:54px; height:5px; background:var(--coral);
+    border-radius:3px; margin-bottom:16px;
+  }
+
+  /* футер */
+  .footer{
+    position:absolute; left:26mm; right:26mm; bottom:8mm;
+    display:flex; justify-content:space-between;
+    font-size:10px; color:var(--muted);
+    border-top:1px solid var(--line);
+    padding-top:5px;
+  }
+
+  /* сетки */
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  .grid4{ display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:10px; }
+
+  .card{
+    background:#fff; border:1px solid var(--line);
+    border-radius:10px; padding:14px 16px;
+  }
+  .card.tint{ background:var(--panel); border-color:#cdd5f5; }
+  .card .ico{
+    width:30px; height:30px; border-radius:8px; background:var(--ink);
+    color:var(--yellow); font-weight:800; display:flex; align-items:center; justify-content:center;
+    font-size:15px; margin-bottom:9px;
+  }
+
+  ul.clean{ list-style:none; }
+  ul.clean li{
+    font-size:14px; line-height:1.45; padding:5px 0 5px 20px; position:relative;
+  }
+  ul.clean li::before{
+    content:""; position:absolute; left:0; top:11px;
+    width:7px; height:7px; border-radius:2px; background:var(--blue);
+  }
+  ul.clean li.coral::before{ background:var(--coral); }
+  ul.clean li.green::before{ background:var(--green); }
+
+  .num{
+    font-size:46px; font-weight:800; color:var(--blue); line-height:1; letter-spacing:-1px;
+  }
+  .num.coral{ color:var(--coral); }
+  .num.yellow{ color:var(--ink); }
+  .numlabel{ font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted); margin-top:6px; }
+
+  table.tech{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.tech th{
+    text-align:left; padding:8px 10px; background:var(--ink); color:#fff;
+    font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:1px;
+  }
+  table.tech td{ padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  table.tech tr:nth-child(even) td{ background:#f4f6ff; }
+  table.tech td:first-child{ font-weight:700; color:var(--ink); white-space:nowrap; }
+  table.tech td:nth-child(2){ font-weight:600; }
+
+  .tag{
+    display:inline-block; padding:3px 9px; border-radius:20px;
+    font-size:10.5px; font-weight:700; letter-spacing:.5px;
+  }
+  .tag.easy{ background:#e7f6e1; color:var(--green); }
+  .tag.med{ background:#fff4d6; color:#8a6d12; }
+  .tag.logic{ background:#fde7ec; color:var(--coral); }
+
+  /* блок-схема архитектуры */
+  .arch{ display:flex; align-items:stretch; gap:10px; margin-top:8px; }
+  .arch .col{ flex:1; display:flex; flex-direction:column; gap:8px; }
+  .node{
+    border-radius:10px; padding:11px 12px; text-align:center;
+    font-size:13px; font-weight:700; color:#fff;
+  }
+  .arrow{
+    align-self:center; font-size:18px; color:var(--blue); font-weight:800;
+  }
+  .node.client{ background:#444; }
+  .node.app{ background:var(--blue); }
+  .node.db{ background:var(--ink); }
+  .node.ai{ background:var(--coral); }
+  .node.sched{ background:#7a5cd6; }
+  .node.mail{ background:var(--green); }
+  .node small{ display:block; font-weight:400; font-size:10px; opacity:.85; margin-top:2px; }
+
+  code.mono{ font-family:"SF Mono","Menlo",monospace; }
+
+  .step-line{ display:flex; gap:10px; align-items:flex-start; }
+  .step-line .n{
+    flex:0 0 26px; height:26px; border-radius:50%; background:var(--ink); color:var(--yellow);
+    font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center;
+  }
+
+  .badge{
+    display:inline-block; padding:6px 12px; border-radius:8px;
+    background:var(--yellow); color:var(--ink); font-weight:800; font-size:13px;
+  }
+  .slide.dark .badge{ background:var(--yellow); color:var(--ink); }
+
+  .urlbox{
+    font-family:"SF Mono","Menlo",monospace; font-size:13px;
+    background:#fff; border:1px solid var(--line); border-radius:8px;
+    padding:8px 12px; color:var(--blue); display:inline-block;
+  }
+  .slide.dark .urlbox{ background:#13234d; border-color:#22347f; color:#9db4ff; }
+</style>
+</head>
+<body>
+
+<!-- 1. ТИТУЛ -->
+<section class="slide dark">
+  <div style="position:absolute; top:20mm; right:26mm; width:120px; height:120px; border-radius:24px; background:linear-gradient(135deg,var(--coral),var(--yellow)); opacity:.85;"></div>
+  <div style="position:absolute; top:54mm; right:44mm; width:60px; height:60px; border-radius:18px; background:var(--blue); opacity:.7;"></div>
+
+  <div style="position:absolute; bottom:30mm; left:26mm; right:120mm;">
+    <div class="kicker">Защита итогового проекта · курс «Вайбкодинг. Профессия»</div>
+    <h1 style="font-size:64px; margin-top:6px;">SMM_testing</h1>
+    <p style="font-size:18px; margin-top:10px; color:#c8d0ee; max-width:150mm; line-height:1.4;">
+      Система автоматизированного тестирования студентов<br>по курсу «Взаимодействие с социальными медиа»
+    </p>
+  </div>
+
+  <div style="position:absolute; bottom:18mm; left:26mm; font-size:13px; color:#9aa6cc;">
+    <strong style="color:#fff;">Павел Кариков</strong> · НИТУ МИСИС · 28 августа 2026
+  </div>
+</section>
+
+<!-- 2. КОНТЕКСТ И ПРОБЛЕМА -->
+<section class="slide">
+  <div class="kicker">01 · Контекст</div>
+  <h2>Проблема: ручная проверка усвоения лекций</h2>
+  <div class="accentbar"></div>
+
+  <div class="grid2" style="margin-top:6px;">
+    <div>
+      <p class="lead" style="margin-bottom:14px;">
+        Курс SMM в МИСИС — 9 лекций, поток студентов. После каждой лекции нужно
+        проверить, усвоен ли материал, и решить, кто допущен к финальному зачёту.
+      </p>
+      <ul class="clean">
+        <li class="coral">Проверка вручную — часы преподавателя на каждую лекцию</li>
+        <li class="coral">Субъективность и разночтения в оценке</li>
+        <li class="coral">Нет сводного представления по потоку и итоговому допуску</li>
+        <li class="coral">Сложно отследить, где именно студенты ошибаются</li>
+      </ul>
+    </div>
+    <div class="card tint">
+      <h3 style="margin-bottom:8px;">Нужно</h3>
+      <ul class="clean">
+        <li class="green">Автоматический тест по каждой лекции</li>
+        <li class="green">Объективная оценка: зачёт / незачёт по формальным правилам</li>
+        <li class="green">Сводная таблица прогресса и допуск к зачёту</li>
+        <li class="green">Аналитика по вопросам и уровням сложности</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>2 / 16</span></div>
+</section>
+
+<!-- 3. ЦЕЛЬ И КРИТЕРИИ -->
+<section class="slide">
+  <div class="kicker">02 · Цель и критерии</div>
+  <h2>Что считаем результатом</h2>
+  <div class="accentbar"></div>
+
+  <div class="grid4" style="margin-top:8px;">
+    <div class="card">
+      <div class="num">9</div>
+      <div class="numlabel">лекций → 9 тестов</div>
+    </div>
+    <div class="card">
+      <div class="num">10</div>
+      <div class="numlabel">вопросов в тесте</div>
+    </div>
+    <div class="card">
+      <div class="num coral">7</div>
+      <div class="numlabel">из 10 — зачёт</div>
+    </div>
+    <div class="card">
+      <div class="num coral">81 / 90</div>
+      <div class="numlabel">допуск к зачёту</div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px;">
+    <div class="card tint">
+      <h3 style="margin-bottom:6px;">Зачёт по тесту</h3>
+      <p class="lead" style="font-size:14px;">≥ 7 правильных из 10. Порог и число вопросов — в
+        <code class="mono">config.py</code>, меняются без правки логики.</p>
+    </div>
+    <div class="card tint">
+      <h3 style="margin-bottom:6px;">Допуск к финальному зачёту</h3>
+      <p class="lead" style="font-size:14px;">Пройдены <strong>все 9 тестов</strong> и суммарно
+        <strong>≥ 81</strong> правильного ответа из 90 (≈ 90%).</p>
+    </div>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>3 / 16</span></div>
+</section>
+
+<!-- 4. ПРОДУКТ: СТУДЕНТ -->
+<section class="slide">
+  <div class="kicker">03 · Продукт</div>
+  <h2>Сценарий студента</h2>
+  <div class="accentbar"></div>
+
+  <div style="display:flex; flex-direction:column; gap:11px; margin-top:6px;">
+    <div class="step-line"><div class="n">1</div><div style="padding-top:3px;"><strong>Открывает сайт</strong> — видит список тестов по лекциям (доступны только <code class="mono">open</code> и наступившие <code class="mono">scheduled</code>).</div></div>
+    <div class="step-line"><div class="n">2</div><div style="padding-top:3px;"><strong>Регистрируется</strong> — имя, фамилия, группа, корпоративная почта <code class="mono">@misis.ru</code> (домен проверяется).</div></div>
+    <div class="step-line"><div class="n">3</div><div style="padding-top:3px;"><strong>Проходит тест</strong> — 10 вопросов, один вопрос на экране, таймер <strong>3 минуты</strong>.</div></div>
+    <div class="step-line"><div class="n">4</div><div style="padding-top:3px;"><strong>Получает результат</strong> — зачёт / незачёт, число правильных, разбор ошибок.</div></div>
+    <div class="step-line"><div class="n">5</div><div style="padding-top:3px;"><strong>Копия результата</strong> — письмом на <code class="mono">@misis.ru</code> от имени преподавателя (Яндекс SMTP, опционально).</div></div>
+  </div>
+
+  <div class="card tint" style="margin-top:14px;">
+    <span class="tag easy">анти-списывание</span>
+    <span class="tag med" style="margin-left:6px;">таймер 3 мин</span>
+    <span class="tag logic" style="margin-left:6px;">поток по 1 вопросу</span>
+    <span class="tag easy" style="margin-left:6px;">кулдаун 24 ч при таймауте</span>
+    <span class="tag med" style="margin-left:6px;">лучшая попытка в зачёт</span>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>4 / 16</span></div>
+</section>
+
+<!-- 5. ПРОДУКТ: ПРЕПОДАВАТЕЛЬ -->
+<section class="slide">
+  <div class="kicker">04 · Продукт</div>
+  <h2>Сценарий преподавателя</h2>
+  <div class="accentbar"></div>
+
+  <div style="display:flex; flex-direction:column; gap:11px; margin-top:6px;">
+    <div class="step-line"><div class="n">1</div><div style="padding-top:3px;"><strong>Загружает PDF-презентацию</strong> лекции в защищённом кабинете (пароль).</div></div>
+    <div class="step-line"><div class="n">2</div><div style="padding-top:3px;"><strong>GPT-4o-mini генерирует тест</strong> из текста слайдов: 10 вопросов в пропорции 4 / 4 / 2 с правильными ответами.</div></div>
+    <div class="step-line"><div class="n">3</div><div style="padding-top:3px;"><strong>Проверяет предпросмотр</strong> и публикует: вручную («Открыть доступ») или по расписанию (дата/время → <code class="mono">scheduled</code> → авто-<code class="mono">open</code>).</div></div>
+    <div class="step-line"><div class="n">4</div><div style="padding-top:3px;"><strong>Видит аналитику</strong> — сводная таблица попыток: кто, какой тест, зачёт, на какие вопросы ответил неверно.</div></div>
+    <div class="step-line"><div class="n">5</div><div style="padding-top:3px;"><strong>Итоговый допуск</strong> — по каждому студенту: прогресс по 9 тестам и статус «допущен / не допущен».</div></div>
+  </div>
+
+  <div class="card tint" style="margin-top:12px; font-size:13.5px; color:var(--muted);">
+    <strong style="color:var(--ink);">Гибридный режим:</strong> можно загрузить PDF для автогенерации
+    <em>или</em> готовый JSON-файл теста. Жизненный цикл:
+    <code class="mono">draft → scheduled → open → closed</code>.
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>5 / 16</span></div>
+</section>
+
+<!-- 6. СТРУКТУРА ВОПРОСОВ -->
+<section class="slide">
+  <div class="kicker">05 · Дизайн теста</div>
+  <h2>Структура вопросов: 4 / 4 / 2</h2>
+  <div class="accentbar"></div>
+
+  <div class="grid3" style="margin-top:6px;">
+    <div class="card">
+      <span class="tag easy">лёгкие · 4</span>
+      <p class="lead" style="font-size:13.5px; margin-top:10px;">Базовое понимание темы, фактология. Проверяют, что материал в целом усвоен.</p>
+    </div>
+    <div class="card">
+      <span class="tag med">средние · 4</span>
+      <p class="lead" style="font-size:13.5px; margin-top:10px;">Применение знаний, анализ кейсов. Уход от зубрёжки к пониманию.</p>
+    </div>
+    <div class="card">
+      <span class="tag logic">логика · 2</span>
+      <p class="lead" style="font-size:13.5px; margin-top:10px;">Нестандартное применение, рассуждение. То, что сложнее «прогнать» через LLM.</p>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px;">
+    <div class="card tint">
+      <h3 style="margin-bottom:6px;">Пропорция фиксируется в конфиге</h3>
+      <p class="lead" style="font-size:13.5px;">Структура 4/4/2 валидируется при загрузке JSON — тест не пройдёт проверку, если пропорция нарушена.</p>
+    </div>
+    <div class="card tint">
+      <h3 style="margin-bottom:6px;">Формат вопроса</h3>
+      <p class="lead" style="font-size:13.5px;">Поле <code class="mono">difficulty: easy | medium | logic</code>. В кабинете видна разбивка по уровням — где студенты ошибаются чаще.</p>
+    </div>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>6 / 16</span></div>
+</section>
+
+<!-- 7. СТЕК -->
+<section class="slide">
+  <div class="kicker">06 · Технологии</div>
+  <h2>Стек и обоснование выбора</h2>
+  <div class="accentbar"></div>
+
+  <table class="tech" style="margin-top:6px;">
+    <thead><tr><th>Слой</th><th>Технология</th><th>Почему</th></tr></thead>
+    <tbody>
+      <tr><td>Backend</td><td>Python + FastAPI</td><td>Асинхронность, автодокументация <code class="mono">/docs</code>, «показный» для диплома</td></tr>
+      <tr><td>БД</td><td>SQLite + SQLAlchemy</td><td>Файл без сервера, портативность, ORM упрощает запросы преподавателя</td></tr>
+      <tr><td>Фронтенд</td><td>Jinja2 + HTML/CSS</td><td>Один проект без сборки SPA — результат виден сразу</td></tr>
+      <tr><td>Генерация тестов</td><td>OpenAI SDK + GPT-4o-mini</td><td>LLM создаёт 4/4/2 из текста PDF; дешёвая и быстрая модель</td></tr>
+      <tr><td>Парсинг PDF</td><td>pdfplumber</td><td>Извлечение текста слайдов из презентации</td></tr>
+      <tr><td>Расписание</td><td>APScheduler</td><td>Автооткрытие тестов в заданное время</td></tr>
+      <tr><td>Email</td><td>smtplib + email.mime</td><td>Доставка результатов на @misis.ru от имени преподавателя</td></tr>
+      <tr><td>Запуск</td><td>Uvicorn</td><td>Стандартный ASGI-сервер для FastAPI</td></tr>
+    </tbody>
+  </table>
+
+  <p class="lead" style="font-size:12.5px; margin-top:12px;">
+    <strong style="color:var(--ink);">Альтернативы:</strong> Flask (проще, но менее «показной»), PostgreSQL (мощнее, но избыточен для одной группы),
+    React-фронт (отдельная сборка, оверхед для 10 вопросов). Для генерации рассматривался Claude API — выбран GPT-4o-mini как сторонняя LLM по требованию задачи.
+  </p>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>7 / 16</span></div>
+</section>
+
+<!-- 8. АРХИТЕКТУРА -->
+<section class="slide">
+  <div class="kicker">07 · Архитектура</div>
+  <h2>Как устроено внутри</h2>
+  <div class="accentbar"></div>
+
+  <div class="arch" style="margin-top:14px;">
+    <div class="col">
+      <div class="node client">Браузер<small>студент / преподаватель</small></div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="col">
+      <div class="node app">FastAPI<small>routers: student / teacher</small></div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="col">
+      <div class="node db">SQLite<small>models + SQLAlchemy</small></div>
+      <div class="node sched" style="margin-top:10px;">APScheduler<small>scheduled → open</small></div>
+    </div>
+    <div class="arrow">↔</div>
+    <div class="col">
+      <div class="node ai">GPT-4o-mini<small>генерация 4/4/2 из PDF</small></div>
+      <div class="node mail" style="margin-top:10px;">SMTP<small>результат → @misis.ru</small></div>
+    </div>
+  </div>
+
+  <div class="grid3" style="margin-top:18px;">
+    <div class="card tint">
+      <h3 style="margin-bottom:4px;">Сессия</h3>
+      <p class="lead" style="font-size:12.5px;">Подписанная кука (SessionMiddleware), без отдельного auth-сервиса.</p>
+    </div>
+    <div class="card tint">
+      <h3 style="margin-bottom:4px;">Безопасность</h3>
+      <p class="lead" style="font-size:12.5px;">В prod старт падает на дефолтных секретах; кабинет — по паролю.</p>
+    </div>
+    <div class="card tint">
+      <h3 style="margin-bottom:4px;">Конфиг</h3>
+      <p class="lead" style="font-size:12.5px;">Все пороги и структура — в <code class="mono">config.py</code>, секреты — в <code class="mono">.env</code>.</p>
+    </div>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>8 / 16</span></div>
+</section>
+
+<!-- 9. VIBE-CODING -->
+<section class="slide">
+  <div class="kicker">08 · Процесс</div>
+  <h2>Vibe-coding: как делалось</h2>
+  <div class="accentbar"></div>
+
+  <div class="grid2" style="margin-top:6px;">
+    <div>
+      <ul class="clean">
+        <li><strong>Этапы 0–10б</strong> — от каркаса FastAPI до таймера, перепрохождения и деплоя</li>
+        <li><strong>Промпт-драйвен</strong> — задача ставилась Claude Code естественным языком, итеративно</li>
+        <li><strong>Git как дневник</strong> — <strong>20 коммитов за 9 дней</strong> (20–28 августа)</li>
+        <li><strong>Проверка вместе</strong> — каждый шаг: что сделано, какие файлы изменены</li>
+        <li><strong>Без копипаста</strong> — код генерируется и осмысляется, а не переносится</li>
+      </ul>
+    </div>
+    <div class="card tint">
+      <h3 style="margin-bottom:8px;">Роль Claude Code</h3>
+      <ul class="clean">
+        <li class="green">Каркас FastAPI, модели SQLAlchemy, роуты</li>
+        <li class="green">Сервисы: PDF-парсер, AI-генерация, grading, scheduler</li>
+        <li class="green">Jinja-шаблоны и фирменный CSS</li>
+        <li class="green">Миграции схемы без Alembic (идемпотентный скрипт)</li>
+        <li class="green">Деплой-конфиг Render и skill для коллег</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px; background:var(--ink); color:#fff; border:none;">
+    <span class="badge">главный вывод</span>
+    <p style="margin-top:8px; font-size:14.5px; line-height:1.45;">
+      Vibe-coding — не «код без программиста», а <strong style="color:var(--yellow);">результативная связка человека и ассистента</strong>:
+      архитектурные решения и критерии за автором, реализация и рутину — за Claude Code.
+    </p>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>9 / 16</span></div>
+</section>
+
+<!-- 10. МЕТРИКИ -->
+<section class="slide">
+  <div class="kicker">09 · Что сделано</div>
+  <h2>Метрики проекта</h2>
+  <div class="accentbar"></div>
+
+  <div class="grid4" style="margin-top:8px;">
+    <div class="card"><div class="num">20</div><div class="numlabel">python-файлов</div></div>
+    <div class="card"><div class="num">3 785</div><div class="numlabel">строк Python</div></div>
+    <div class="card"><div class="num coral">14</div><div class="numlabel">HTML-шаблонов</div></div>
+    <div class="card"><div class="num coral">1 595</div><div class="numlabel">строк шаблонов</div></div>
+  </div>
+  <div class="grid4" style="margin-top:12px;">
+    <div class="card"><div class="num">667</div><div class="numlabel">строк CSS</div></div>
+    <div class="card"><div class="num">9 / 90</div><div class="numlabel">тестов / вопросов</div></div>
+    <div class="card"><div class="num coral">20</div><div class="numlabel">коммитов</div></div>
+    <div class="card"><div class="num coral">9 дней</div><div class="numlabel">от каркаса до деплоя</div></div>
+  </div>
+
+  <div class="card tint" style="margin-top:14px;">
+    <h3 style="margin-bottom:4px;">Реализованные фичи</h3>
+    <p class="lead" style="font-size:13px;">
+      Автогенерация тестов из PDF (GPT-4o-mini) · гибридный режим JSON · расписание открытия (APScheduler) ·
+      таймер 3 мин + поток по 1 вопросу · перепрохождение с кулдауном 24 ч · лучшая попытка в зачёт ·
+      аналитика по вопросам и уровням · итоговый допуск 81/90 · email-уведомления (Яндекс SMTP) ·
+      демо-автосид для Render · skill развёртывания для коллег.
+    </p>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>10 / 16</span></div>
+</section>
+
+<!-- 11. ДЕПЛОЙ -->
+<section class="slide">
+  <div class="kicker">10 · Деплой</div>
+  <h2>Живое демо на Render free</h2>
+  <div class="accentbar"></div>
+
+  <div class="grid2" style="margin-top:6px;">
+    <div>
+      <ul class="clean">
+        <li><strong>Blueprint <code class="mono">render.yaml</code></strong> — сервис описан как код</li>
+        <li><strong><code class="mono">DEMO_AUTOSEED=1</code></strong> — на эфемерном диске при старте поднимает демо-тест и студентов</li>
+        <li><strong><code class="mono">AI_MOCK=1</code></strong> — демо-вопросы без ключа OpenAI</li>
+        <li><strong><code class="mono">SECRET_KEY</code></strong> генерируется Render, <strong><code class="mono">TEACHER_PASSWORD</code></strong> — вручную</li>
+        <li><strong>HTTPS из коробки</strong>, регион frankfurt, free-тариф</li>
+      </ul>
+    </div>
+    <div class="card tint">
+      <h3 style="margin-bottom:6px;">Особенности free-тарифа</h3>
+      <p class="lead" style="font-size:13.5px;">
+        Диск <strong>эфемерный</strong> — SQLite обнуляется при перезапуске (для демо ок, боевой продакшен — отдельная задача).
+        <strong>Холодный старт</strong> ~1 мин: открыть демо заранее и дождаться загрузки главной.
+      </p>
+      <div style="margin-top:12px;">
+        <span class="urlbox">https://smm-testing.onrender.com</span>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>11 / 16</span></div>
+</section>
+
+<!-- 12. ДЕМО-ЭКРАН -->
+<section class="slide dark">
+  <div class="kicker">11 · Демо</div>
+  <h2 style="color:#fff;">Главная страница сервиса</h2>
+  <div class="accentbar"></div>
+
+  <div style="margin-top:10px; text-align:center;">
+    <img src="screenshots/index.png" alt="Главная SMM Testing"
+         style="max-width:235mm; max-height:96mm; border-radius:10px; border:1px solid #22347f;">
+  </div>
+  <div class="footer" style="border-color:#22347f; color:#5b6aa0;">
+    <span>smm-testing.onrender.com</span><span>12 / 16</span>
+  </div>
+</section>
+
+<!-- 13. ДЕМО: КАБИНЕТ СТУДЕНТА -->
+<section class="slide">
+  <div class="kicker">11 · Демо</div>
+  <h2>Кабинет студента</h2>
+  <div class="accentbar"></div>
+  <p class="lead" style="font-size:13.5px; margin-bottom:10px;">
+    Студент входит по корпоративной почте <code class="mono">@misis.ru</code> и видит
+    доступные тесты по лекциям и свои результаты.
+  </p>
+  <div style="text-align:center;">
+    <img src="screenshots/student_cabinet.png" alt="Кабинет студента"
+         style="max-width:245mm; max-height:104mm; border-radius:10px; border:1px solid var(--line);">
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>13 / 16</span></div>
+</section>
+
+<!-- 14. ДЕМО: КАБИНЕТ ПРЕПОДАВАТЕЛЯ -->
+<section class="slide">
+  <div class="kicker">11 · Демо</div>
+  <h2>Кабинет преподавателя</h2>
+  <div class="accentbar"></div>
+  <p class="lead" style="font-size:13.5px; margin-bottom:10px;">
+    Создание тестов (PDF/JSON/вручную), сводка по 9 лекциям, аналитика попыток и
+    итоговый допуск к зачёту — в одном кабинете.
+  </p>
+  <div style="text-align:center;">
+    <img src="screenshots/teacher_cabinet.png" alt="Кабинет преподавателя"
+         style="max-width:245mm; max-height:104mm; border-radius:10px; border:1px solid var(--line);">
+  </div>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>14 / 16</span></div>
+</section>
+
+<!-- 15. ROADMAP -->
+<section class="slide">
+  <div class="kicker">12 · Развитие</div>
+  <h2>Roadmap: боевой запуск — февраль 2027</h2>
+  <div class="accentbar"></div>
+
+  <div class="grid2" style="margin-top:6px;">
+    <div class="card">
+      <div class="ico">1</div>
+      <h3 style="margin-bottom:4px;">Боевой VPS</h3>
+      <p class="lead" style="font-size:13px;">Переход с демо-деплоя на VPS с постоянной БД и реальным вызовом GPT-4o-mini (<code class="mono">AI_MOCK=0</code>).</p>
+    </div>
+    <div class="card">
+      <div class="ico">2</div>
+      <h3 style="margin-bottom:4px;">Анти-списывание</h3>
+      <p class="lead" style="font-size:13px;">Банк вопросов &gt;10 на лекцию, случайный набор 10 под каждого студента, перемешивание порядка вопросов и вариантов.</p>
+    </div>
+    <div class="card">
+      <div class="ico">3</div>
+      <h3 style="margin-bottom:4px;">Нагрузка 100+</h3>
+      <p class="lead" style="font-size:13px;">Профилирование SQLite под конкурентной записью, при необходимости — PostgreSQL, несколько воркеров за балансировщиком, locust/wrk.</p>
+    </div>
+    <div class="card">
+      <div class="ico">4</div>
+      <h3 style="margin-bottom:4px;">Корп. почта</h3>
+      <p class="lead" style="font-size:13px;">Перевод SMTP на <code class="mono">karikov.pv@misis.ru</code> и верификация владения <code class="mono">@misis.ru</code> у студентов.</p>
+    </div>
+  </div>
+
+  <p class="lead" style="font-size:12.5px; margin-top:14px;">
+    Архитектура курсо-независимая: лекция = единица материала, тест = 10 вопросов 4/4/2. Чтобы запустить по другому курсу —
+    свои PDF/JSON, пороги в <code class="mono">config.py</code>, домен почты и SMTP. Применимо для любой дисциплины.
+  </p>
+  <div class="footer"><span>SMM_testing · Защита итогового проекта</span><span>15 / 16</span></div>
+</section>
+
+<!-- 14. ИТОГ -->
+<section class="slide dark">
+  <div style="position:absolute; top:18mm; right:24mm; width:90px; height:90px; border-radius:20px; background:var(--coral); opacity:.85;"></div>
+  <div style="position:absolute; top:46mm; right:60mm; width:50px; height:50px; border-radius:14px; background:var(--yellow); opacity:.85;"></div>
+
+  <div class="kicker">13 · Итог</div>
+  <h2 style="color:#fff;">Спасибо за внимание</h2>
+  <div class="accentbar"></div>
+
+  <div style="margin-top:8px; max-width:160mm;">
+    <p style="font-size:16px; color:#c8d0ee; line-height:1.5;">
+      Проект показал: vibe-coding как связка автора и Claude Code позволяет за 9 дней пройти от идеи до
+      работающего сервиса с деплоем, не жертвуя архитектурной чистотой. Готов к боевому запуску в весеннем семестре 2027.
+    </p>
+  </div>
+
+  <div style="margin-top:18px; display:flex; gap:16px; flex-wrap:wrap;">
+    <div>
+      <div class="numlabel" style="color:#9aa6cc;">Репозиторий</div>
+      <div class="urlbox" style="margin-top:4px;">github.com/PavelKoff2025/SMM_Testing</div>
+    </div>
+    <div>
+      <div class="numlabel" style="color:#9aa6cc;">Демо</div>
+      <div class="urlbox" style="margin-top:4px;">smm-testing.onrender.com</div>
+    </div>
+  </div>
+
+  <div style="position:absolute; bottom:18mm; left:26mm; font-size:13px; color:#9aa6cc;">
+    <strong style="color:#fff;">Павел Кариков</strong> · НИТУ МИСИС · курс «Вайбкодинг. Профессия» · 28.08.2026
+  </div>
+  <div class="footer" style="border-color:#22347f; color:#5b6aa0;">
+    <span>Вопросы комиссии</span><span>16 / 16</span>
+  </div>
+</section>
+
+</body>
+</html>
